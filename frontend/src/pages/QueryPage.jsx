@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import api from '../lib/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -299,7 +300,7 @@ const QueryPage = () => {
                     {isAssistant ? (
                       <ReactMarkdown 
                         className="prose prose-sm max-w-none prose-slate whitespace-pre-wrap leading-relaxed" 
-                        remarkPlugins={[remarkGfm]}
+                        remarkPlugins={[remarkGfm, remarkBreaks]}
                         components={getMarkdownComponents(references)}
                       >
                         {text}
