@@ -92,6 +92,9 @@ class QueryRequest(BaseModel):
     )
     top_k: int = Field(default=10, description="Number of top results to retrieve")
     stream: bool = Field(default=False, description="Enable streaming response")
+    include_references: bool = Field(default=True, description="Include references in response")
+    query_decomposition: bool = Field(default=True, description="Enable query decomposition")
+    conversation_history: Optional[List[Dict[str, Any]]] = Field(default=None, description="Conversation history")
 
 
 class ContextChunk(BaseModel):

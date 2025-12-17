@@ -2,6 +2,7 @@
 import json
 
 from easy_knowledge_retriever.retrieval import HybridMixRetrieval
+from easy_knowledge_retriever import QueryParam
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from sse_starlette.sse import EventSourceResponse
@@ -34,9 +35,20 @@ async def query(request: QueryRequest):
     logger.info(f"Received query: '{request.query}' (Top K: {request.top_k})")
     
     try:
+        # Create QueryParam from request
+        param = QueryParam(
+            top_k=request.top_k,
+            only_need_context=request.only_need_context,
+            stream=request.stream,
+            include_references=request.include_references,
+            query_decomposition=request.query_decomposition,
+            conversation_history=request.conversation_history,
+            mode="hybrid_mix",
+        )
+        
         # Execute query
         logger.debug("Executing query against RAG engine...")
-        result = await rag_state.rag.aquery(request.query, retrieval=HybridMixRetrieval())
+        result = await rag_state.rag.aquery(request.query, param=param, retrieval=HybridMixRetrieval())
         logger.info("Query executed successfully.")
         
         # Parse result based on whether we want context only or full answer
@@ -126,10 +138,20 @@ async def query_stream(request: QueryRequest):
     
     async def generate():
         try:
+            # Create QueryParam from request
+            param = QueryParam(
+                top_k=request.top_k,
+                only_need_context=request.only_need_context,
+                stream=True,
+                include_references=request.include_references,
+                query_decomposition=request.query_decomposition,
+                conversation_history=request.conversation_history
+            )
+
             # Check if streaming is supported
             if hasattr(rag_state.rag, 'aquery_stream'):
                 logger.debug("Starting streaming response...")
-                async for chunk in rag_state.rag.aquery_stream(request.query, retrieval=HybridMixRetrieval()):
+                async for chunk in rag_state.rag.aquery_stream(request.query, param=param, retrieval=HybridMixRetrieval()):
                     yield {
                         "event": "token",
                         "data": json.dumps({"type": "token", "content": chunk})
@@ -138,7 +160,7 @@ async def query_stream(request: QueryRequest):
             else:
                 # Fall back to non-streaming
                 logger.warning("Streaming not supported by backend, falling back to standard query.")
-                result = await rag_state.rag.aquery(request.query, retrieval=HybridMixRetrieval())
+                result = await rag_state.rag.aquery(request.query, param=param, retrieval=HybridMixRetrieval())
                 yield {
                     "event": "token",
                     "data": json.dumps({"type": "token", "content": str(result)})

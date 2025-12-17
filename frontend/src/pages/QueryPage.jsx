@@ -39,6 +39,10 @@ const CopyButton = ({ content }) => {
 const parseRagContent = (content) => {
   if (typeof content !== 'string') return { text: content, references: [] };
 
+  // Fix weird newlines after list numbers that break markdown rendering
+  // Example: "1. \n Content" -> "1. Content"
+  content = content.replace(/(^|\n)(\d+\.)\s*\n\s*/g, '$1$2 ');
+
   // 1. Extract References/Sources section at the end
   // Matches:
   // - Optional newline
