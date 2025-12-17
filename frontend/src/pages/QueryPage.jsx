@@ -122,6 +122,57 @@ const CitationTooltip = ({ data }) => {
   );
 };
 
+const DetailsViewer = ({ details }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  
+  if (!details) return null;
+  
+  return (
+    <div className="mt-2">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setIsOpen(!isOpen)}
+        className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1 h-auto py-1 px-2"
+      >
+        <Info className="w-3 h-3" />
+        {isOpen ? "Masquer les détails" : "Afficher les détails techniques"}
+      </Button>
+      
+      {isOpen && (
+        <div className="mt-2 space-y-3 bg-slate-50 p-3 rounded-md border border-slate-200 text-xs font-mono overflow-auto max-h-96">
+          {details.system_prompt && (
+             <div>
+                <div className="font-bold text-slate-700 mb-1">System Prompt</div>
+                <div className="bg-white p-2 rounded border border-slate-200 whitespace-pre-wrap text-slate-600">
+                  {details.system_prompt}
+                </div>
+             </div>
+          )}
+          
+          {details.user_prompt && (
+             <div>
+                <div className="font-bold text-slate-700 mb-1">User Prompt</div>
+                <div className="bg-white p-2 rounded border border-slate-200 whitespace-pre-wrap text-slate-600">
+                  {details.user_prompt}
+                </div>
+             </div>
+          )}
+          
+          {details.metadata && Object.keys(details.metadata).length > 0 && (
+             <div>
+                <div className="font-bold text-slate-700 mb-1">Metadata</div>
+                <div className="bg-white p-2 rounded border border-slate-200 whitespace-pre-wrap text-slate-600">
+                  {JSON.stringify(details.metadata, null, 2)}
+                </div>
+             </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const QueryPage = () => {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -160,7 +211,12 @@ const QueryPage = () => {
       const botMessage = { 
         role: 'assistant', 
         content: content || "Pas de réponse.",
-        context: response.data.contexts || (answerObj && answerObj.chunks) || (answerObj && answerObj.context)
+        context: response.data.contexts || (answerObj && answerObj.chunks) || (answerObj && answerObj.context),
+        details: answerObj ? {
+            system_prompt: answerObj.system_prompt,
+            user_prompt: answerObj.user_prompt,
+            metadata: answerObj.metadata
+        } : null
       };
       
       setMessages(prev => [...prev, botMessage]);
@@ -284,6 +340,8 @@ const QueryPage = () => {
                       </ul>
                     </div>
                   )}
+                  
+                  {isAssistant && msg.details && <DetailsViewer details={msg.details} />}
                 </div>
               </div>
             );

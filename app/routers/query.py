@@ -71,16 +71,33 @@ async def query(request: QueryRequest):
             
             content_val = ""
             # Extract content from result
+            content_val = ""
+            system_prompt_val = ""
+            user_prompt_val = ""
+            metadata_val = {}
+
             if LibQueryResult and isinstance(result, LibQueryResult):
                 content_val = result.content
+                system_prompt_val = result.system_prompt
+                user_prompt_val = result.user_prompt
+                metadata_val = result.metadata
             elif hasattr(result, "content"):
                 content_val = result.content
+                if hasattr(result, "system_prompt"):
+                    system_prompt_val = result.system_prompt
+                if hasattr(result, "user_prompt"):
+                    user_prompt_val = result.user_prompt
+                if hasattr(result, "metadata"):
+                    metadata_val = result.metadata
             else:
                 content_val = str(result)
             
             query_result = QueryResult(
                 content=content_val,
                 query=request.query,
+                system_prompt=system_prompt_val,
+                user_prompt=user_prompt_val,
+                metadata=metadata_val,
                 status="success"
             )
             
