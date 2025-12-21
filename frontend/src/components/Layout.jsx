@@ -19,8 +19,8 @@ const Layout = () => {
       {/* Sidebar */}
       <aside className="w-64 bg-white border-r border-slate-200 hidden md:flex flex-col">
         <div className="p-6 border-b border-slate-200">
-          <h1 className="text-xl font-bold text-slate-900">EasyRAG</h1>
-          <p className="text-xs text-slate-500">Knowledge Retriever</p>
+          <h1 className="text-xl font-bold text-slate-900">{window.env?.APP_TITLE || 'EasyRAG'}</h1>
+          <p className="text-xs text-slate-500">{window.env?.APP_SUBTITLE || 'Knowledge Retriever'}</p>
         </div>
         
         <nav className="flex-1 overflow-y-auto p-4 space-y-1">
@@ -50,7 +50,7 @@ const Layout = () => {
       <main className="flex-1 flex flex-col overflow-hidden">
         <header className="h-14 border-b border-slate-200 bg-white flex items-center px-6 md:hidden">
           <Menu className="w-6 h-6 text-slate-500" />
-          <span className="ml-4 font-semibold">EasyRAG</span>
+          <span className="ml-4 font-semibold">{window.env?.APP_TITLE || 'EasyRAG'}</span>
         </header>
         
         <div className="flex-1 overflow-auto p-6">
