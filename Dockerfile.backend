@@ -1,0 +1,23 @@
+# Dockerfile pour le Backend (FastAPI)
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Installation des dépendances système si nécessaire (ex: gcc pour compiler certaines libs)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copie des requirements et installation
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copie du code source
+COPY app ./app
+COPY .env.example .
+
+# Création des répertoires pour les données si nécessaire
+RUN mkdir -p rag_data documents
+
+# Commande de lancement
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
