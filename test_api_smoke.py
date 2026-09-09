@@ -10,6 +10,12 @@ that will silently return empty answers.
 import os
 import sys
 
+# Force the "no credentials" scenario regardless of any local .env: env vars
+# take precedence over the env file in pydantic-settings, so these tests stay
+# hermetic on a developer machine that has a working .env.
+os.environ["EKR_LLM_API_KEY"] = ""
+os.environ["EKR_EMBEDDING_API_KEY"] = ""
+
 os.environ.setdefault("EKR_AUTO_INGEST", "false")
 os.environ.setdefault("EKR_WORKING_DIR", "/tmp/ekr_smoke/rag_data")
 os.environ.setdefault("EKR_SOURCE_DIR", "/tmp/ekr_smoke/documents")

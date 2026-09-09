@@ -1,6 +1,4 @@
 """RAG instance management router"""
-import asyncio
-
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field
 from app.config import settings

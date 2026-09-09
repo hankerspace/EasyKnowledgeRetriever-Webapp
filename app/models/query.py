@@ -1,6 +1,6 @@
 """Query Pydantic models"""
 from typing import Optional, List, Literal, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Entity(BaseModel):
@@ -79,8 +79,7 @@ class QueryResult(BaseModel):
     status: Literal["success", "failure"] = "success"
     message: str = ""
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class QueryRequest(BaseModel):
