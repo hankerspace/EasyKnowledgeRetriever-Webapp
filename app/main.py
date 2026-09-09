@@ -13,6 +13,7 @@ from app.logger import setup_logging, get_logger
 from app.routers import (
     rag_router, query_router, database_router
 )
+from app.preflight import run_preflight
 from app.state import rag_state
 
 # Setup logging
@@ -32,6 +33,8 @@ async def _startup_ingest():
             settings.source_dir,
             settings.extension_list,
             settings.unsupported_extensions,
+            settings.ingest_start_page,
+            settings.ingest_end_page,
         )
     except asyncio.CancelledError:
         logger.info("Ingestion cancelled during shutdown.")
@@ -51,6 +54,10 @@ async def lifespan(app: FastAPI):
 
     logger.info(f"Working directory: {settings.working_dir}")
     logger.info(f"Source directory: {settings.source_dir}")
+
+    # Catch a broken image before it burns minutes and LLM credit per document.
+    from app.services.ingest_service import ingest_state
+    ingest_state.preflight_error = run_preflight(settings.extension_list)
 
     try:
         # The OpenAI client builds fine without a key and only fails at call
@@ -172,6 +179,7 @@ async def health():
         "rag_initialized": rag_state.is_initialized,
         "startup_error": rag_state.startup_error,
         "ingestion": ingest_state.status,
+        "preflight_error": ingest_state.preflight_error,
     }
 
 

@@ -17,6 +17,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     apache2-utils \
     build-essential \
     curl \
+    git \
+    # OpenCV comes in through MinerU and dynamically links X11/GL libraries
+    # that python:*-slim does not ship. Without these, `import cv2` fails with
+    # "libxcb.so.1: cannot open shared object file" and every PDF parse dies.
+    libgl1 \
+    libglib2.0-0 \
+    libxcb1 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
     && rm -rf /var/lib/apt/lists/*
 
 # MinerU/HuggingFace model cache. Mount a volume here (see docker-compose.yml)
@@ -26,21 +36,28 @@ ENV HF_HOME=/app/models/huggingface \
     PYTHONUNBUFFERED=1
 RUN mkdir -p /app/models/huggingface
 
-# Escape hatch for installing the library from somewhere other than PyPI,
+# Install torch FIRST -- before EKR_PACKAGE and before requirements.txt, both
+# of which depend on it through the [pdf] extra. Left to the default index,
+# torch drags in the whole CUDA stack (cuDNN alone is ~650MB); installing it
+# afterwards swaps torch but leaves ~8GB of nvidia-* wheels behind, which is
+# how this image once reached 10.8GB on a host with no GPU.
+#
+# torchvision must come from the SAME index: a PyPI torchvision compiled
+# against a different torch fails at import with
+# "RuntimeError: operator torchvision::nms does not exist", which surfaces
+# only when doclayout_yolo loads during a PDF parse.
+# Build with --build-arg TORCH_VARIANT=default on an actual GPU host.
+ARG TORCH_VARIANT=cpu
+RUN if [ "$TORCH_VARIANT" = "cpu" ]; then \
+        pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu; \
+    fi
+
+# Escape hatch for installing the library from somewhere other than PyPI.
+# Needs git in the image (installed above) -- pip shells out to it for git+ URLs.
 # e.g. a git ref while iterating on both repos:
 #   docker compose build --build-arg EKR_PACKAGE="easy-knowledge-retriever[pdf] @ git+https://github.com/hankerspace/EasyKnowledgeRetriever@main"
 ARG EKR_PACKAGE=""
 RUN if [ -n "$EKR_PACKAGE" ]; then pip install --no-cache-dir "$EKR_PACKAGE"; fi
-
-# Install torch FIRST, from the CPU wheel index. Left to the default index,
-# torch drags in the whole CUDA stack (cuDNN alone is ~650MB) and the image
-# grows by several GB for a deployment that has no GPU. Installing it here
-# satisfies the [pdf] extra's requirement, so the next step won't refetch it.
-# Build with --build-arg TORCH_VARIANT=default on an actual GPU host.
-ARG TORCH_VARIANT=cpu
-RUN if [ "$TORCH_VARIANT" = "cpu" ]; then \
-        pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu; \
-    fi
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

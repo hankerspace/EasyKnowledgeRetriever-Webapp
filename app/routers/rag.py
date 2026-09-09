@@ -86,6 +86,8 @@ async def trigger_ingest(background_tasks: BackgroundTasks):
         settings.source_dir,
         settings.extension_list,
         settings.unsupported_extensions,
+        settings.ingest_start_page,
+        settings.ingest_end_page,
     )
     logger.info("Manual ingestion scheduled.")
     return InitializeResponse(success=True, message="Ingestion started in background.")

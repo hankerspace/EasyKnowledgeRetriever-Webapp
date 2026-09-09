@@ -14,6 +14,7 @@ class RAGState:
         self._vector_storage = None
         self._graph_storage = None
         self._doc_status_storage = None
+        self._reranker_service = None
         self._working_dir: Optional[str] = None
         self._initialized: bool = False
         self._startup_error: Optional[str] = None
@@ -25,6 +26,7 @@ class RAGState:
         self._kv_config: Optional[dict] = None
         self._vector_config: Optional[dict] = None
         self._graph_config: Optional[dict] = None
+        self._reranker_config: Optional[dict] = None
     
     @property
     def is_initialized(self) -> bool:
@@ -61,6 +63,10 @@ class RAGState:
     def set_graph_config(self, config: dict):
         """Set graph storage configuration"""
         self._graph_config = config
+
+    def set_reranker_config(self, config: Optional[dict]):
+        """Set reranker configuration. None disables reranking."""
+        self._reranker_config = config
     
     @staticmethod
     def missing_credentials(settings) -> list:
@@ -85,6 +91,11 @@ class RAGState:
             "base_url": settings.embedding_base_url,
             "embedding_dim": settings.embedding_dim
         })
+        self.set_reranker_config({
+            "model": settings.reranker_model,
+            "api_key": settings.reranker_api_key or settings.llm_api_key,
+            "base_url": settings.reranker_base_url,
+        } if settings.reranker_enabled else None)
 
     def get_current_config(self) -> dict:
         """Get current configuration"""
@@ -133,6 +144,7 @@ class RAGState:
                 self._vector_storage = self._create_vector_storage(working_dir)
                 self._graph_storage = self._create_graph_storage(working_dir)
                 self._doc_status_storage = JsonDocStatusStorage(working_dir=working_dir)
+                self._reranker_service = self._create_reranker()
                 
                 # Create RAG instance
                 self._rag_instance = EasyKnowledgeRetriever(
@@ -143,6 +155,7 @@ class RAGState:
                     vector_storage=self._vector_storage,
                     graph_storage=self._graph_storage,
                     doc_status_storage=self._doc_status_storage,
+                    reranker_service=self._reranker_service,
                 )
                 
                 await self._rag_instance.initialize_storages()
@@ -210,6 +223,20 @@ class RAGState:
         
         return NetworkXStorage(working_dir=working_dir)
     
+    def _create_reranker(self):
+        """Build the reranker service, or None when not configured."""
+        config = self._reranker_config
+        if not config:
+            return None
+
+        from easy_knowledge_retriever.reranker.openai import OpenAIRerankerService
+
+        return OpenAIRerankerService(
+            model=config["model"],
+            base_url=config["base_url"],
+            api_key=config.get("api_key"),
+        )
+
     async def finalize(self) -> bool:
         """Finalize and save storage state"""
         async with self._lock:
@@ -231,6 +258,7 @@ class RAGState:
             "kv_storage_type": self._kv_config.get("type", "json") if self._kv_config else "json",
             "vector_storage_type": self._vector_config.get("type", "nano") if self._vector_config else "nano",
             "graph_storage_type": self._graph_config.get("type", "networkx") if self._graph_config else "networkx",
+            "reranker_model": self._reranker_config.get("model") if self._reranker_config else None,
         }
 
 

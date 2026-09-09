@@ -27,6 +27,7 @@ class IngestState:
     errors: List[Dict[str, str]] = field(default_factory=list)
     skipped: List[str] = field(default_factory=list)
     message: str = ""
+    preflight_error: Optional[str] = None
 
     @property
     def is_finished(self) -> bool:
@@ -42,6 +43,7 @@ class IngestState:
             "errors": self.errors,
             "skipped": self.skipped,
             "message": self.message,
+            "preflight_error": self.preflight_error,
         }
 
 
@@ -68,6 +70,8 @@ async def ingest_source_directory(
     source_dir: str,
     extensions: List[str],
     unsupported: Optional[List[str]] = None,
+    start_page: Optional[int] = None,
+    end_page: Optional[int] = None,
 ) -> IngestState:
     """Ingest every supported file found under `source_dir`.
 
@@ -105,6 +109,16 @@ async def ingest_source_directory(
             logger.error(state.message)
             return state
 
+        if state.preflight_error and any(f.lower().endswith(".pdf")
+                                         for f in scan_source_directory(source_dir, extensions)):
+            state.status = "failed"
+            state.message = (
+                "PDF ingestion is unavailable in this image: "
+                f"{state.preflight_error}"
+            )
+            logger.error(state.message)
+            return state
+
         files = scan_source_directory(source_dir, extensions)
         state.total = len(files)
         state.status = "running"
@@ -114,7 +128,12 @@ async def ingest_source_directory(
             state.current_file = path
             try:
                 logger.info("Ingesting %s ...", path)
-                await rag_state.rag.ingest(path)
+                kwargs = {}
+                if start_page is not None:
+                    kwargs["start_page"] = start_page
+                if end_page is not None:
+                    kwargs["end_page"] = end_page
+                await rag_state.rag.ingest(path, **kwargs)
                 state.ingested += 1
                 logger.info("Ingested %s (%d/%d)", path, state.ingested, state.total)
             except Exception as exc:
@@ -123,9 +142,38 @@ async def ingest_source_directory(
                 logger.error("Failed to ingest %s: %s", path, exc, exc_info=True)
 
         state.current_file = None
+
+        # rag.ingest() returns cleanly even when the pipeline failed downstream
+        # (an embedding 422, say): the library records the failure on the
+        # document instead of raising. Without this check the API would report
+        # a successful ingestion over an empty index.
+        await _record_failed_documents(state)
+
         state.status = "completed"
         state.message = (
             f"Ingested {state.ingested}/{state.total} document(s), {state.failed} failed."
         )
         logger.info(state.message)
         return state
+
+
+async def _record_failed_documents(state: IngestState) -> None:
+    """Fold documents the library marked FAILED into the reported state."""
+    try:
+        from easy_knowledge_retriever.kg.kv_storage.base import DocStatus
+
+        failed_docs = await rag_state.rag.doc_status.get_docs_by_status(DocStatus.FAILED)
+    except Exception as exc:  # never let the check itself break ingestion
+        logger.warning("Could not read document statuses: %s", exc)
+        return
+
+    already = {e["file"] for e in state.errors}
+    for doc_id, doc in (failed_docs or {}).items():
+        path = getattr(doc, "file_path", None) or doc_id
+        if path in already:
+            continue
+        reason = getattr(doc, "error_msg", None) or getattr(doc, "error", None) or "marked FAILED by the library"
+        state.errors.append({"file": path, "error": str(reason)})
+        state.failed += 1
+        state.ingested = max(0, state.ingested - 1)
+        logger.error("Document %s reported FAILED after ingestion: %s", path, reason)

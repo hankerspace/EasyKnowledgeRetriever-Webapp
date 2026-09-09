@@ -74,3 +74,4 @@ class RAGStatusResponse(BaseModel):
     kv_storage_type: Optional[str] = None
     vector_storage_type: Optional[str] = None
     graph_storage_type: Optional[str] = None
+    reranker_model: Optional[str] = None

@@ -1,6 +1,7 @@
 """Application configuration using pydantic-settings"""
 from typing import List, Optional
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app import __version__
@@ -33,6 +34,11 @@ class Settings(BaseSettings):
     # Ingest the source directory on startup (in the background).
     auto_ingest: bool = True
 
+    # Optional PDF page range (0-based). None = whole document. Useful to
+    # measure ingestion cost on a slice before committing to a long document.
+    ingest_start_page: Optional[int] = None
+    ingest_end_page: Optional[int] = None
+
     # Allowed CORS origins, comma-separated. Empty = no CORS middleware, which
     # is correct when the app is served same-origin behind nginx.
     cors_origins: str = ""
@@ -51,8 +57,23 @@ class Settings(BaseSettings):
     embedding_base_url: str = "https://api.openai.com/v1"
     embedding_dim: int = 1536
 
+    # Reranker (optional). Scores retrieved chunks against the query with a
+    # cross-encoder before generation. base_url is the FULL endpoint, path
+    # included -- the library POSTs to it directly.
+    reranker_model: Optional[str] = None
+    reranker_api_key: Optional[str] = None
+    reranker_base_url: Optional[str] = None
+
     # Supported files for ingestion
     allowed_extensions: str = ".pdf,.txt,.md"
+
+    @field_validator("ingest_start_page", "ingest_end_page", mode="before")
+    @classmethod
+    def _empty_string_is_none(cls, v):
+        """`EKR_INGEST_START_PAGE=` in a .env must mean "unset", not a parse error."""
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
 
     @property
     def app_version(self) -> str:
@@ -78,6 +99,10 @@ class Settings(BaseSettings):
             if ext.strip()
         ]
         return [ext for ext in requested if ext not in SUPPORTED_EXTENSIONS]
+
+    @property
+    def reranker_enabled(self) -> bool:
+        return bool(self.reranker_model and self.reranker_base_url)
 
     @property
     def cors_origin_list(self) -> List[str]:
