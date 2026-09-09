@@ -6,9 +6,15 @@ import { Button } from '../components/ui/button';
 import { RefreshCw, ZoomIn, ZoomOut, X } from 'lucide-react';
 import { toast } from 'sonner';
 
+// Rendering caps. react-force-graph-2d stops being usable well below this on
+// a typical laptop; raise only if you have measured it on your corpus.
+const NODE_LIMIT = 500;
+const EDGE_LIMIT = 1000;
+
 const GraphPage = () => {
   const [data, setData] = useState({ nodes: [], links: [] });
   const [loading, setLoading] = useState(false);
+  const [truncated, setTruncated] = useState(null);
   const [dimensions, setDimensions] = useState({ w: 800, h: 600 });
   const [selectedElement, setSelectedElement] = useState(null);
   const containerRef = useRef(null);
@@ -17,14 +23,20 @@ const GraphPage = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Removed limit query parameters as requested
+      // The graph is capped on purpose: a full corpus yields thousands of
+      // entities, which means a multi-MB payload and a force simulation that
+      // freezes the tab. The API reports the real totals so we can say when
+      // the view is partial.
       const [nodesRes, edgesRes] = await Promise.all([
-        api.get('/db/graph/nodes'),
-        api.get('/db/graph/edges')
+        api.get('/db/graph/nodes', { params: { limit: NODE_LIMIT } }),
+        api.get('/db/graph/edges', { params: { limit: EDGE_LIMIT } })
       ]);
 
       let rawNodes = nodesRes.data.nodes || [];
       const rawLinks = edgesRes.data.edges || [];
+
+      const totalNodes = nodesRes.data.total_nodes ?? rawNodes.length;
+      const totalEdges = edgesRes.data.total_edges ?? rawLinks.length;
 
       // Process links
       const links = rawLinks.map(e => ({
@@ -56,7 +68,17 @@ const GraphPage = () => {
       const nodes = Array.from(nodeMap.values());
 
       setData({ nodes, links });
-      toast.success(`Graphe chargé: ${nodes.length} nœuds, ${links.length} liens`);
+
+      const isPartial = totalNodes > rawNodes.length || totalEdges > rawLinks.length;
+      setTruncated(isPartial ? { totalNodes, totalEdges } : null);
+
+      if (isPartial) {
+        toast.warning(
+          `Vue partielle : ${nodes.length}/${totalNodes} nœuds, ${links.length}/${totalEdges} liens`
+        );
+      } else {
+        toast.success(`Graphe chargé: ${nodes.length} nœuds, ${links.length} liens`);
+      }
     } catch (error) {
       console.error(error);
       toast.error("Erreur lors du chargement du graphe");
@@ -174,6 +196,12 @@ const GraphPage = () => {
 
       <div className="flex flex-1 gap-4 min-h-0">
         <div className="flex-1 relative overflow-hidden rounded-xl border border-slate-200 bg-white" ref={containerRef}>
+          {truncated && (
+            <div className="absolute top-2 left-2 z-10 rounded-md bg-amber-50 border border-amber-200 px-3 py-1.5 text-xs text-amber-800 shadow-sm">
+              Vue partielle — {data.nodes.length} nœuds affichés sur {truncated.totalNodes},{' '}
+              {data.links.length} liens sur {truncated.totalEdges}
+            </div>
+          )}
           {data.nodes.length > 0 ? (
              <ForceGraph2D
               ref={fgRef}

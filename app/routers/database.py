@@ -1,6 +1,6 @@
 """Database access API router"""
 import json
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from app.models.database import (
     GraphNode, GraphEdge, GraphSearchRequest, GraphSearchResponse,
     GraphExportRequest, GraphExportResponse, VectorSearchRequest, VectorSearchResponse,
@@ -16,7 +16,7 @@ def _check_initialized():
     if not rag_state.is_initialized:
         raise HTTPException(
             status_code=400, 
-            detail="RAG is not initialized. Please call POST /rag/initialize first"
+            detail="RAG is not initialized. Check GET /health and GET /rag/ingest/status."
         )
 
 
@@ -67,8 +67,16 @@ async def _get_nx_graph(graph_storage):
 # ============ Graph Endpoints ============
 
 @router.get("/graph/nodes", response_model=GraphSearchResponse)
-async def get_graph_nodes(limit: int = 100000, offset: int = 0):
-    """List all graph nodes (entities)"""
+async def get_graph_nodes(
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
+):
+    """List graph nodes (entities), paginated.
+
+    The default used to be 100000, which on a real corpus returns a multi-MB
+    payload and freezes the browser rendering it. `total_nodes` reports the
+    full graph size so a client can page through it.
+    """
     _check_initialized()
     
     try:
@@ -76,6 +84,7 @@ async def get_graph_nodes(limit: int = 100000, offset: int = 0):
         
         # Try to get nodes from the graph
         nodes = []
+        total_nodes = 0
         if hasattr(graph_storage, '_graph'):
             # NetworkX storage
             import networkx as nx
@@ -84,6 +93,7 @@ async def get_graph_nodes(limit: int = 100000, offset: int = 0):
                 
             if graph is not None:
                 node_list = list(graph.nodes(data=True))
+                total_nodes = len(node_list)
                 
                 for node_id, data in node_list[offset:offset + limit]:
                     nodes.append(GraphNode(
@@ -95,7 +105,7 @@ async def get_graph_nodes(limit: int = 100000, offset: int = 0):
         return GraphSearchResponse(
             nodes=nodes,
             edges=[],
-            total_nodes=len(nodes),
+            total_nodes=total_nodes,
             total_edges=0
         )
         
@@ -104,14 +114,18 @@ async def get_graph_nodes(limit: int = 100000, offset: int = 0):
 
 
 @router.get("/graph/edges", response_model=GraphSearchResponse)
-async def get_graph_edges(limit: int = 100000, offset: int = 0):
-    """List all graph edges (relationships)"""
+async def get_graph_edges(
+    limit: int = Query(default=1000, ge=1, le=10000),
+    offset: int = Query(default=0, ge=0),
+):
+    """List graph edges (relationships), paginated. See /graph/nodes."""
     _check_initialized()
     
     try:
         graph_storage = rag_state._graph_storage
         
         edges = []
+        total_edges = 0
         if hasattr(graph_storage, '_graph'):
             import networkx as nx
             
@@ -119,6 +133,7 @@ async def get_graph_edges(limit: int = 100000, offset: int = 0):
             
             if graph is not None:
                 edge_list = list(graph.edges(data=True))
+                total_edges = len(edge_list)
                 
                 for source, target, data in edge_list[offset:offset + limit]:
                     edges.append(GraphEdge(
@@ -132,7 +147,7 @@ async def get_graph_edges(limit: int = 100000, offset: int = 0):
             nodes=[],
             edges=edges,
             total_nodes=0,
-            total_edges=len(edges)
+            total_edges=total_edges
         )
         
     except Exception as e:
@@ -298,8 +313,11 @@ async def search_vectors(request: VectorSearchRequest):
 # ============ KV Storage Endpoints ============
 
 @router.get("/kv/keys", response_model=KVListResponse)
-async def list_kv_keys(prefix: str = "", limit: int = 100000):
-    """List keys in KV storage"""
+async def list_kv_keys(
+    prefix: str = "",
+    limit: int = Query(default=1000, ge=1, le=10000),
+):
+    """List keys in KV storage, capped."""
     _check_initialized()
     
     try:

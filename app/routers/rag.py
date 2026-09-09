@@ -1,7 +1,11 @@
 """RAG instance management router"""
-from fastapi import APIRouter, HTTPException
+import asyncio
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field
+from app.config import settings
 from app.models.config import RAGStatusResponse
+from app.services.ingest_service import ingest_source_directory, ingest_state
 from app.state import rag_state
 from app.logger import get_logger
 
@@ -52,3 +56,38 @@ async def get_rag_status():
         return RAGStatusResponse(**status)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/ingest/status")
+async def get_ingest_status():
+    """Progress of the ingestion pass (files seen / ingested / failed).
+
+    This is what the UI polls instead of showing an opaque 400 while the
+    knowledge base is still being built.
+    """
+    return ingest_state.as_dict()
+
+
+@router.post("/ingest", response_model=InitializeResponse)
+async def trigger_ingest(background_tasks: BackgroundTasks):
+    """Re-scan the source directory and ingest new documents.
+
+    Returns immediately; poll GET /rag/ingest/status for progress. Already
+    ingested documents are skipped by the library's own deduplication.
+    """
+    if not rag_state.is_initialized:
+        raise HTTPException(status_code=400, detail="RAG is not initialized")
+    if not ingest_state.is_finished:
+        raise HTTPException(
+            status_code=409,
+            detail=f"An ingestion is already {ingest_state.status}.",
+        )
+
+    background_tasks.add_task(
+        ingest_source_directory,
+        settings.source_dir,
+        settings.extension_list,
+        settings.unsupported_extensions,
+    )
+    logger.info("Manual ingestion scheduled.")
+    return InitializeResponse(success=True, message="Ingestion started in background.")

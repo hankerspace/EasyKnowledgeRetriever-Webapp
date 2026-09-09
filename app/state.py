@@ -2,14 +2,6 @@
 from typing import Optional
 import asyncio
 
-# Placeholder for the actual EasyKnowledgeRetriever import
-# from easy_knowledge_retriever import EasyKnowledgeRetriever, QueryParam
-# from easy_knowledge_retriever.llm.service import OpenAILLMService, OpenAIEmbeddingService
-# from easy_knowledge_retriever.kg.json_kv_impl import JsonKVStorage
-# from easy_knowledge_retriever.kg.nano_vector_db_impl import NanoVectorDBStorage
-# from easy_knowledge_retriever.kg.networkx_impl import NetworkXStorage
-# from easy_knowledge_retriever.kg.json_doc_status_impl import JsonDocStatusStorage
-
 
 class RAGState:
     """Manages the global RAG instance and its configuration"""
@@ -24,6 +16,7 @@ class RAGState:
         self._doc_status_storage = None
         self._working_dir: Optional[str] = None
         self._initialized: bool = False
+        self._startup_error: Optional[str] = None
         self._lock = asyncio.Lock()
         
         # Store configurations
@@ -36,6 +29,14 @@ class RAGState:
     @property
     def is_initialized(self) -> bool:
         return self._initialized
+
+    @property
+    def startup_error(self) -> Optional[str]:
+        """Why initialization failed, or None. Surfaced on /health."""
+        return self._startup_error
+
+    def record_startup_error(self, exc: BaseException) -> None:
+        self._startup_error = f"{type(exc).__name__}: {exc}"
     
     @property
     def rag(self):
@@ -61,6 +62,14 @@ class RAGState:
         """Set graph storage configuration"""
         self._graph_config = config
     
+    @staticmethod
+    def missing_credentials(settings) -> list:
+        """Required settings that are absent. Empty list means good to go."""
+        missing = []
+        if not settings.llm_api_key:
+            missing.append("EKR_LLM_API_KEY")
+        return missing
+
     def configure_from_settings(self, settings):
         """Configure RAG state from application settings"""
         self.set_llm_config({
@@ -70,7 +79,9 @@ class RAGState:
         })
         self.set_embedding_config({
             "model": settings.embedding_model,
-            "api_key": settings.embedding_api_key,
+            # Same provider in the common case: fall back to the LLM key
+            # rather than silently embedding with no credentials.
+            "api_key": settings.embedding_api_key or settings.llm_api_key,
             "base_url": settings.embedding_base_url,
             "embedding_dim": settings.embedding_dim
         })
@@ -136,6 +147,7 @@ class RAGState:
                 
                 await self._rag_instance.initialize_storages()
                 self._initialized = True
+                self._startup_error = None
                 return True
                 
             except Exception as e:
@@ -149,14 +161,13 @@ class RAGState:
         config = self._kv_config or {}
         storage_type = config.get("type", "json")
         
-        if storage_type == "json":
-            return JsonKVStorage(working_dir=working_dir)
-        elif storage_type == "redis":
-            # Redis storage would be implemented here if available
-            # from easy_knowledge_retriever.kg.redis_kv_impl import RedisKVStorage
-            # return RedisKVStorage(url=config.get("redis_url", "redis://localhost:6379"))
-            pass # Redis implementation currently missing
-        
+        if storage_type == "redis":
+            # Not implemented in the library. Fail loudly rather than silently
+            # handing back a JSON store the operator did not ask for.
+            raise NotImplementedError(
+                "Redis KV storage is not implemented. Use type='json'."
+            )
+
         return JsonKVStorage(working_dir=working_dir)
     
     def _create_vector_storage(self, working_dir: str):

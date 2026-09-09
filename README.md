@@ -1,89 +1,125 @@
 # EasyKnowledgeRetriever WebApp
 
-This project is a complete web application (Backend + Frontend) serving as a graphical interface for the [EasyKnowledgeRetriever](https://github.com/hankerspace/EasyKnowledgeRetriever) library.
-
-It allows you to easily configure your RAG pipeline, ingest documents, visualize your knowledge base (Graph and Vectors), and interact with it via a chat interface.
+Web application (Backend + Frontend) providing a graphical interface for the
+[EasyKnowledgeRetriever](https://github.com/hankerspace/EasyKnowledgeRetriever)
+library: configure a RAG pipeline, ingest documents, explore the knowledge base
+(graph and vectors) and query it through a chat interface.
 
 ## Architecture
 
-The project is divided into two parts:
+- **Backend (`app/`)** — FastAPI REST API. Orchestrates the RAG, exposes query
+  and database endpoints. Bound to `127.0.0.1:8000`; never exposed directly.
+- **Frontend (`frontend/`)** — React + Vite + TailwindCSS.
+- **Docker image** — a single container running nginx (TLS-less reverse proxy,
+  basic auth, static frontend) and uvicorn under supervisord.
 
-- **Backend (`app/`)**: A REST API developed with **FastAPI**. It manages RAG orchestration, database access, and exposes endpoints for the frontend.
-- **Frontend (`frontend/`)**: A modern user interface developed with **React** and **Vite**. It uses TailwindCSS for styling and enables fluid interaction with the API.
+Configuration is **environment-only**. There is no configuration API.
 
-## Features
+## Quick start (Docker, recommended)
 
-- ⚙️ **Configuration Management**: Interface to configure LLM models, embedding models, and storage types (Graph, Vector, KV).
-- 📄 **Document Ingestion**: Automatic scanning and ingestion of files from the source directory.
-- 💬 **Chat Interface**: Ask questions to your knowledge base using different modes (Mixed, Local, Global).
-- 🕸️ **Graph Visualization**: Visually explore nodes and relationships in your knowledge base.
-- 📊 **Data Explorer**: Visualize vector data and Key-Value storage.
+```bash
+cp .env.example .env
+# Set at least EKR_LLM_API_KEY, AUTH_USER and AUTH_PASSWORD.
+# Generate a password: openssl rand -base64 24
 
-## Prerequisites
+mkdir -p documents rag_data
+cp /path/to/your.pdf documents/
 
-- **Python** 3.10 or higher
-- **Node.js** 18 or higher
-- API Keys for LLM services (OpenAI, or compatible)
-
-## Installation and Startup
-
-It is recommended to open two terminals to run the backend and frontend simultaneously.
-
-### 1. Backend (API)
-
-From the project root:
-
-1. **Install Python dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. **Configuration:**
-   Copy the example `.env.example` file to `.env` and fill in your API keys.
-   ```bash
-   cp .env.example .env
-   # Edit .env with your keys (EKR_LLM_API_KEY, etc.)
-   ```
-
-3. **Start the server:**
-   ```bash
-   uvicorn app.main:app --reload
-   ```
-   The API will be accessible at [http://localhost:8000](http://localhost:8000).
-   Swagger documentation is available at [http://localhost:8000/docs](http://localhost:8000/docs).
-
-### 2. Frontend (User Interface)
-
-From the `frontend` directory:
-
-1. **Navigate to the frontend directory:**
-   ```bash
-   cd frontend
-   ```
-
-2. **Install Node dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **Start the development server:**
-   ```bash
-   npm run dev
-   ```
-   The interface will be accessible at [http://localhost:5173](http://localhost:5173) (or the port indicated by Vite).
-
-## Project Structure
-
+docker compose up -d --build
 ```
-.
-├── app/                 # Backend source code (FastAPI)
-├── frontend/            # Frontend source code (React + Vite)
-├── rag_data/            # Default working directory for RAG data
-├── documents/           # Default source directory for file ingestion
-├── requirements.txt     # Python dependencies
-└── README.md            # This file
+
+The UI is on <http://127.0.0.1:85>. The API answers immediately; ingestion runs
+in the **background** and can take hours on a large corpus.
+
+```bash
+curl -s localhost:85/health              # liveness, no auth needed
+curl -s localhost:85/rag/ingest/status   # ingestion progress
+curl -s localhost:85/health/ready        # 503 until RAG is up AND ingest done
 ```
+
+### Before publishing library version 1.2.5
+
+`requirements.txt` targets `easy-knowledge-retriever[pdf]>=1.2.5`. Until that
+release is on PyPI, build against the library repository directly:
+
+```bash
+docker compose build --build-arg \
+  EKR_PACKAGE="easy-knowledge-retriever[pdf] @ git+https://github.com/hankerspace/EasyKnowledgeRetriever@main"
+```
+
+### First-run model download
+
+MinerU downloads several GB of layout/OCR models on the first PDF ingestion.
+They are cached in the `ekr_models` volume, so this happens once. To bake them
+into the image instead (slower build, fast and offline-capable first run):
+
+```bash
+docker compose build --build-arg PREFETCH_MINERU_MODELS=true
+```
+
+## Local development
+
+Two terminals.
+
+**Backend:**
+```bash
+pip install -r requirements.txt
+cp .env.example .env      # then fill in EKR_LLM_API_KEY
+uvicorn app.main:app --reload --port 8000
+```
+
+**Frontend:**
+```bash
+cd frontend && npm install && npm run dev
+```
+Vite proxies `/rag`, `/query`, `/db` and `/health` to `localhost:8000`.
+
+**Tests** (no LLM key, no network required):
+```bash
+python test_api_smoke.py
+```
+
+## Configuration
+
+Every setting is documented in [`.env.example`](.env.example). The ones that
+matter most:
+
+| Variable | Default | Notes |
+|---|---|---|
+| `EKR_LLM_API_KEY` | *(none)* | **Required.** Startup fails loudly without it. |
+| `EKR_EMBEDDING_API_KEY` | *(falls back to the LLM key)* | Same provider in the common case. |
+| `EKR_EMBEDDING_MODEL` / `EKR_EMBEDDING_DIM` | `text-embedding-3-small` / `1536` | Changing either **invalidates the index**: rebuild `rag_data/` from scratch. |
+| `EKR_ALLOWED_EXTENSIONS` | `.pdf,.txt,.md` | Unsupported extensions are reported under `skipped`, not silently dropped. |
+| `EKR_AUTO_INGEST` | `true` | Set `false` to ingest out-of-band via `POST /rag/ingest`. |
+| `EKR_ENABLE_DOCS` | `false` | Exposes `/docs`, `/redoc`, `/openapi.json`. |
+| `EKR_MAX_ASYNC` | `4` | Concurrent LLM calls. `1` (library default) is very slow; raise to match your provider's rate limits. |
+| `AUTH_USER` / `AUTH_PASSWORD` | *(none)* | Both must be set, or **the app is served with no authentication**. |
+
+## Deployment notes
+
+- **TLS is not handled here.** The compose file publishes on `127.0.0.1` only.
+  Put a TLS-terminating proxy (Caddy, Traefik, nginx) in front before exposing
+  it: basic auth over plain HTTP sends the password in clear.
+- **Back up `rag_data/`.** Rebuilding it costs hours of LLM calls and real money.
+- The `ekr_models` volume holds the MinerU model cache; do not prune it casually.
+
+## Endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/health` | Liveness. No auth. Always 200 while the process runs. |
+| `GET` | `/health/ready` | Readiness. 503 until RAG is initialized and ingestion has finished. |
+| `GET` | `/rag/status` | Current RAG configuration. |
+| `GET` | `/rag/ingest/status` | Files seen / ingested / failed, with per-file errors. |
+| `POST` | `/rag/ingest` | Re-scan the source directory (returns immediately). |
+| `POST` | `/query` | Ask a question. |
+| `POST` | `/query/context` | Retrieved context only, no generation. |
+| `GET` | `/db/graph/nodes`, `/db/graph/edges` | Paginated graph access. |
 
 ## License
 
-MIT
+This application is MIT.
+
+> **Note**: it depends on `easy-knowledge-retriever`, which is licensed
+> **CC BY-NC-SA 4.0** (NonCommercial). Any commercial deployment requires
+> separate permission from the library's author.

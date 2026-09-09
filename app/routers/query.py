@@ -1,12 +1,8 @@
 """Query API router"""
-import json
-
 from easy_knowledge_retriever.retrieval import HybridMixRetrieval
 from easy_knowledge_retriever import QueryParam
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
-from sse_starlette.sse import EventSourceResponse
-from app.models.query import QueryRequest, QueryResponse, ContextChunk, StreamChunk, QueryResult
+from app.models.query import QueryRequest, QueryResponse, ContextChunk, QueryResult
 from app.state import rag_state
 from app.logger import get_logger
 try:
@@ -23,7 +19,7 @@ def _check_initialized():
     if not rag_state.is_initialized:
         raise HTTPException(
             status_code=400, 
-            detail="RAG is not initialized. Please call POST /rag/initialize first"
+            detail="RAG is not initialized. Check GET /health and GET /rag/ingest/status."
         )
 
 
@@ -81,7 +77,6 @@ async def query(request: QueryRequest):
             # Result is the generated answer
             logger.debug("Processing answer response")
             
-            content_val = ""
             # Extract content from result
             content_val = ""
             system_prompt_val = ""
@@ -104,6 +99,18 @@ async def query(request: QueryRequest):
             else:
                 content_val = str(result)
             
+            # An empty answer means the pipeline failed somewhere and the
+            # error was swallowed. Reporting success here is how a broken
+            # deployment looks fine from the outside.
+            if not content_val or not str(content_val).strip():
+                logger.error("Query produced an empty answer for: %r", request.query)
+                return QueryResponse(
+                    success=False,
+                    query=request.query,
+                    error="The query returned an empty answer. Check the API logs, "
+                          "the LLM credentials and that documents have been ingested.",
+                )
+
             query_result = QueryResult(
                 content=content_val,
                 query=request.query,
@@ -127,58 +134,6 @@ async def query(request: QueryRequest):
             query=request.query,
             error=str(e)
         )
-
-
-@router.post("/stream")
-async def query_stream(request: QueryRequest):
-    """Stream query response using Server-Sent Events"""
-    _check_initialized()
-    
-    logger.info(f"Received stream query: '{request.query}'")
-    
-    async def generate():
-        try:
-            # Create QueryParam from request
-            param = QueryParam(
-                top_k=request.top_k,
-                only_need_context=request.only_need_context,
-                stream=True,
-                include_references=request.include_references,
-                query_decomposition=request.query_decomposition,
-                conversation_history=request.conversation_history
-            )
-
-            # Check if streaming is supported
-            if hasattr(rag_state.rag, 'aquery_stream'):
-                logger.debug("Starting streaming response...")
-                async for chunk in rag_state.rag.aquery_stream(request.query, param=param, retrieval=HybridMixRetrieval()):
-                    yield {
-                        "event": "token",
-                        "data": json.dumps({"type": "token", "content": chunk})
-                    }
-                logger.debug("Streaming completed successfully.")
-            else:
-                # Fall back to non-streaming
-                logger.warning("Streaming not supported by backend, falling back to standard query.")
-                result = await rag_state.rag.aquery(request.query, param=param, retrieval=HybridMixRetrieval())
-                yield {
-                    "event": "token",
-                    "data": json.dumps({"type": "token", "content": str(result)})
-                }
-            
-            yield {
-                "event": "done",
-                "data": json.dumps({"type": "done"})
-            }
-            
-        except Exception as e:
-            logger.error(f"Error during streaming: {e}", exc_info=True)
-            yield {
-                "event": "error",
-                "data": json.dumps({"type": "error", "content": str(e)})
-            }
-    
-    return EventSourceResponse(generate())
 
 
 @router.post("/context", response_model=QueryResponse)

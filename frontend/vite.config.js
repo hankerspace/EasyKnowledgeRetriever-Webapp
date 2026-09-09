@@ -1,15 +1,16 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// https://vitejs.dev/config/
+// Dev server only. In production the frontend is served by nginx from the same
+// origin as the API (see nginx.conf), so no proxy and no CORS are involved.
 export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/config': 'http://localhost:8000',
       '/rag': 'http://localhost:8000',
       '/query': 'http://localhost:8000',
-      '/db': 'http://localhost:8000'
+      '/db': 'http://localhost:8000',
+      '/health': 'http://localhost:8000'
     }
   }
 })

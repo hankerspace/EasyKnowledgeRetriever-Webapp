@@ -1,0 +1,27 @@
+# Secrets & local config -- never commit these
+.env
+.env.*
+!.env.example
+
+# RAG data and source documents (may contain client content)
+rag_data/
+documents/
+parsed_docs/
+models/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Node / frontend build
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

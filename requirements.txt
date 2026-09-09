@@ -1,10 +1,13 @@
 # FastAPI REST API for EasyKnowledgeRetriever
-easy-knowledge-retriever>=1.2.4
-fastapi>=0.109.0
-uvicorn[standard]>=0.27.0
-python-multipart>=0.0.6
-pydantic>=2.0.0
-pydantic-settings>=2.0.0
-aiofiles>=23.0.0
-httpx>=0.26.0
-sse-starlette>=1.8.0
+#
+# [pdf] pulls MinerU + torch for PDF parsing. Drop the extra if you only ever
+# ingest .txt / .md -- it saves several GB in the image.
+easy-knowledge-retriever[pdf]>=1.2.5,<2.0
+
+fastapi>=0.109.0,<1.0
+uvicorn[standard]>=0.27.0,<1.0
+python-multipart>=0.0.6,<1.0
+pydantic>=2.0.0,<3.0
+pydantic-settings>=2.0.0,<3.0
+aiofiles>=23.0.0,<25.0
+httpx>=0.26.0,<1.0

@@ -1,31 +1,43 @@
 #!/bin/sh
 set -e
 
-# Génération de la configuration frontend
+# --- Frontend runtime config -------------------------------------------
 echo "Generating frontend config..."
-# Assurer que le répertoire existe (au cas où)
 mkdir -p /app/static
 
-cat <<EOF > /app/static/config.js
-window.env = {
-  APP_TITLE: "${APP_TITLE:-EasyRAG}",
-  APP_SUBTITLE: "${APP_SUBTITLE:-Knowledge Retriever}"
-};
-EOF
+# Escape double quotes so a title containing one cannot break out of the
+# generated JS string.
+esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 
-# Configuration de l'authentification Nginx
+cat <<EOJS > /app/static/config.js
+window.env = {
+  APP_TITLE: "$(esc "${APP_TITLE:-EasyRAG}")",
+  APP_SUBTITLE: "$(esc "${APP_SUBTITLE:-Knowledge Retriever}")"
+};
+EOJS
+
+# --- Nginx basic auth ---------------------------------------------------
 NGINX_AUTH_CONF="/etc/nginx/auth_part.conf"
 
 if [ -n "$AUTH_USER" ] && [ -n "$AUTH_PASSWORD" ]; then
     echo "Enabling Basic Auth for user: $AUTH_USER"
     htpasswd -b -c /etc/nginx/.htpasswd "$AUTH_USER" "$AUTH_PASSWORD"
-    
+    chmod 640 /etc/nginx/.htpasswd
+
     echo 'auth_basic "Restricted Access";' > "$NGINX_AUTH_CONF"
     echo 'auth_basic_user_file /etc/nginx/.htpasswd;' >> "$NGINX_AUTH_CONF"
 else
-    echo "Basic Auth disabled"
+    echo "########################################################"
+    echo "# WARNING: AUTH_USER/AUTH_PASSWORD unset.              #"
+    echo "# The application is served WITHOUT authentication.     #"
+    echo "########################################################"
     echo 'auth_basic off;' > "$NGINX_AUTH_CONF"
 fi
 
-# Exécution de la commande
+# --- Fail fast on missing credentials -----------------------------------
+if [ -z "$EKR_LLM_API_KEY" ]; then
+    echo "ERROR: EKR_LLM_API_KEY is not set. The RAG cannot answer queries." >&2
+    echo "       Set it in .env (see .env.example)." >&2
+fi
+
 exec "$@"

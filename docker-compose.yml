@@ -1,17 +1,41 @@
 services:
   app:
-    build: .
+    build:
+      context: .
+      args:
+        # Set to "true" to bake the MinerU models into the image instead of
+        # downloading them on the first ingestion. Slower build, fast first run.
+        PREFETCH_MINERU_MODELS: "false"
     image: easy-knowledge-retriever:latest
     container_name: easy_knowledge_retriever
     ports:
-      - "85:80"
+      # HTTP only. Put a TLS-terminating reverse proxy in front of this before
+      # exposing it to anything but localhost -- basic auth over plain HTTP
+      # sends the password in clear.
+      - "127.0.0.1:85:80"
     volumes:
       - ./rag_data:/app/rag_data
       - ./documents:/app/documents
+      # Multi-GB MinerU/HF model cache. Without this it is re-downloaded every
+      # time the container is recreated.
+      - ekr_models:/app/models
     env_file:
       - .env
     environment:
-      # Surcharge optionnelle si nécessaire, mais les defaults du Dockerfile sont bons
       - EKR_WORKING_DIR=/app/rag_data
       - EKR_SOURCE_DIR=/app/documents
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  ekr_models:
