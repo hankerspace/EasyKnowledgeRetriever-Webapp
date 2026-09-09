@@ -32,6 +32,16 @@ RUN mkdir -p /app/models/huggingface
 ARG EKR_PACKAGE=""
 RUN if [ -n "$EKR_PACKAGE" ]; then pip install --no-cache-dir "$EKR_PACKAGE"; fi
 
+# Install torch FIRST, from the CPU wheel index. Left to the default index,
+# torch drags in the whole CUDA stack (cuDNN alone is ~650MB) and the image
+# grows by several GB for a deployment that has no GPU. Installing it here
+# satisfies the [pdf] extra's requirement, so the next step won't refetch it.
+# Build with --build-arg TORCH_VARIANT=default on an actual GPU host.
+ARG TORCH_VARIANT=cpu
+RUN if [ "$TORCH_VARIANT" = "cpu" ]; then \
+        pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu; \
+    fi
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

@@ -47,6 +47,17 @@ docker compose build --build-arg \
   EKR_PACKAGE="easy-knowledge-retriever[pdf] @ git+https://github.com/hankerspace/EasyKnowledgeRetriever@main"
 ```
 
+### Image size
+
+The `[pdf]` extra pulls torch. By default the build installs the **CPU** wheel:
+left to the default index, torch drags in the whole CUDA stack (cuDNN alone is
+~650 MB) and the image grows by several GB on a host with no GPU. On an actual
+GPU host:
+
+```bash
+docker compose build --build-arg TORCH_VARIANT=default
+```
+
 ### First-run model download
 
 MinerU downloads several GB of layout/OCR models on the first PDF ingestion.
