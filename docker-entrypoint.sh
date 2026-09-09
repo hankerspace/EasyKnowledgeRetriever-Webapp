@@ -22,7 +22,13 @@ NGINX_AUTH_CONF="/etc/nginx/auth_part.conf"
 if [ -n "$AUTH_USER" ] && [ -n "$AUTH_PASSWORD" ]; then
     echo "Enabling Basic Auth for user: $AUTH_USER"
     htpasswd -b -c /etc/nginx/.htpasswd "$AUTH_USER" "$AUTH_PASSWORD"
-    chmod 640 /etc/nginx/.htpasswd
+    # nginx workers drop to www-data and must be able to read this file --
+    # root-only 0640 makes every authenticated request fail with a 500.
+    if chown root:www-data /etc/nginx/.htpasswd 2>/dev/null; then
+        chmod 640 /etc/nginx/.htpasswd
+    else
+        chmod 644 /etc/nginx/.htpasswd
+    fi
 
     echo 'auth_basic "Restricted Access";' > "$NGINX_AUTH_CONF"
     echo 'auth_basic_user_file /etc/nginx/.htpasswd;' >> "$NGINX_AUTH_CONF"
