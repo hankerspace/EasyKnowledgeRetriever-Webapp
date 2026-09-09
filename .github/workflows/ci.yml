@@ -36,22 +36,15 @@ jobs:
       # fails minutes into the first PDF ingestion, as a subprocess ImportError.
       - name: PDF toolchain must import
         run: |
-          docker run --rm ekr-ci:latest \
-            python -c "
-            import torch, torchvision, cv2
-            import doclayout_yolo.nn.tasks
-            from mineru.cli.client import main
-            import mineru.backend.pipeline.pipeline_analyze
-            print('PDF toolchain OK', torch.__version__, torchvision.__version__)"
+          # One line on purpose: a multi-line `python -c` in YAML keeps the
+          # block indentation and dies with IndentationError.
+          docker run --rm ekr-ci:latest python -c "import torch, torchvision, cv2; import doclayout_yolo.nn.tasks; from mineru.cli.client import main; import mineru.backend.pipeline.pipeline_analyze; print('PDF toolchain OK', torch.__version__, torchvision.__version__)"
 
       # Guards the ordering bug that once made this image 10.8GB: torch must
       # come from the CPU wheel index, not drag in the whole CUDA stack.
       - name: torch must be the CPU build
         run: |
-          docker run --rm ekr-ci:latest python -c "
-          import torch, sys
-          print('torch', torch.__version__)
-          sys.exit(0 if 'cpu' in torch.__version__ else 1)"
+          docker run --rm ekr-ci:latest python -c "import torch, sys; print('torch', torch.__version__); sys.exit(0 if 'cpu' in torch.__version__ else 1)"
           if docker run --rm ekr-ci:latest pip list 2>/dev/null | grep -qi '^nvidia-'; then
             echo "CUDA packages present in a CPU image"; exit 1
           fi
