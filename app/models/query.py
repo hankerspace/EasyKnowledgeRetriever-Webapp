@@ -22,23 +22,19 @@ class Relationship(BaseModel):
 
 
 class Chunk(BaseModel):
-    """Text chunk used in context"""
-    id: Optional[str] = None
+    """Text chunk used in context (shape of the library's Chunk dataclass)."""
+    chunk_id: Optional[str] = None
+    reference_id: str = ""
+    file_path: str = ""
+    page_start: Optional[int] = None
+    page_end: Optional[int] = None
     content: str
-    source: Optional[str] = None
-    page: Optional[int] = None
-    score: Optional[float] = None
-    metadata: Optional[Dict[str, Any]] = None
 
 
 class Reference(BaseModel):
-    """Reference source"""
-    id: str
-    title: Optional[str] = None
-    url: Optional[str] = None
-    page: Optional[int] = None
-    chunk_id: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    """Reference source: [reference_id] -> file (shape of the library's Reference)."""
+    reference_id: str
+    file_path: str = ""
 
 
 class QueryResult(BaseModel):

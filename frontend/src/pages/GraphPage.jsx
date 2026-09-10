@@ -1,10 +1,18 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
-import api from '../lib/api';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
-import { Button } from '../components/ui/button';
-import { RefreshCw, ZoomIn, ZoomOut, X } from 'lucide-react';
+import { useTheme } from 'next-themes';
+import api from '@/lib/api';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { RefreshCw, ZoomIn, ZoomOut, X, Waypoints } from 'lucide-react';
 import { toast } from 'sonner';
+
+// Canvas colours cannot read CSS variables, so mirror the theme here.
+const PALETTE = {
+  light: { node: '#4f46e5', link: '#d4d4d8', bg: '#ffffff', text: '#18181b' },
+  dark: { node: '#a5b4fc', link: '#3f3f46', bg: '#12141c', text: '#e4e4e7' },
+};
 
 // Rendering caps. react-force-graph-2d stops being usable well below this on
 // a typical laptop; raise only if you have measured it on your corpus.
@@ -19,6 +27,8 @@ const GraphPage = () => {
   const [selectedElement, setSelectedElement] = useState(null);
   const containerRef = useRef(null);
   const fgRef = useRef();
+  const { resolvedTheme } = useTheme();
+  const colors = PALETTE[resolvedTheme === 'dark' ? 'dark' : 'light'];
 
   const fetchData = async () => {
     setLoading(true);
@@ -169,7 +179,7 @@ const GraphPage = () => {
 
       return items.map((item, idx) => (
           <div key={idx} className="flex flex-col mb-2">
-            <span className="font-semibold text-slate-500 capitalize">{item.key}:</span>
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{item.key}:</span>
             <span className="break-words text-sm whitespace-pre-wrap">
                 {typeof item.value === 'object' ? JSON.stringify(item.value) : String(item.value)}
             </span>
@@ -178,11 +188,11 @@ const GraphPage = () => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-140px)] space-y-4 relative">
-       <div className="flex justify-between items-center">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 p-4 sm:p-6">
+       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-           <h2 className="text-3xl font-bold tracking-tight">Visualisation</h2>
-           <p className="text-muted-foreground">Exploration du graphe de connaissances.</p>
+           <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight"><Waypoints className="size-5 text-muted-foreground" /> Graphe de connaissances</h2>
+           <p className="text-sm text-muted-foreground">Entités et relations extraites des documents. Cliquez sur un élément pour voir ses propriétés.</p>
         </div>
         <div className="flex gap-2">
            <Button variant="outline" size="icon" onClick={handleZoomOut}><ZoomOut className="w-4 h-4" /></Button>
@@ -195,9 +205,9 @@ const GraphPage = () => {
       </div>
 
       <div className="flex flex-1 gap-4 min-h-0">
-        <div className="flex-1 relative overflow-hidden rounded-xl border border-slate-200 bg-white" ref={containerRef}>
+        <div className="relative flex-1 overflow-hidden rounded-xl border bg-card" ref={containerRef}>
           {truncated && (
-            <div className="absolute top-2 left-2 z-10 rounded-md bg-amber-50 border border-amber-200 px-3 py-1.5 text-xs text-amber-800 shadow-sm">
+            <div className="absolute left-2 top-2 z-10 rounded-md border border-warning/40 bg-warning/10 px-3 py-1.5 text-xs text-foreground shadow-sm">
               Vue partielle — {data.nodes.length} nœuds affichés sur {truncated.totalNodes},{' '}
               {data.links.length} liens sur {truncated.totalEdges}
             </div>
@@ -209,9 +219,9 @@ const GraphPage = () => {
               height={dimensions.h}
               graphData={data}
               nodeLabel="id"
-              nodeColor={() => '#475569'}
-              linkColor={() => '#cbd5e1'}
-              backgroundColor="#ffffff"
+              nodeColor={() => colors.node}
+              linkColor={() => colors.link}
+              backgroundColor={colors.bg}
               nodeRelSize={6}
               linkDirectionalArrowLength={3.5}
               linkDirectionalArrowRelPos={1}
@@ -225,12 +235,12 @@ const GraphPage = () => {
                 ctx.font = `${fontSize}px Sans-Serif`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'top';
-                ctx.fillStyle = '#000';
+                ctx.fillStyle = colors.text;
                 ctx.fillText(label, node.x, node.y + 8);
               }}
             />
           ) : (
-            <div className="h-full flex items-center justify-center text-slate-400">
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
               {loading ? 'Chargement...' : 'Aucune donnée de graphe disponible.'}
             </div>
           )}
@@ -238,7 +248,7 @@ const GraphPage = () => {
 
         {/* Property Window Sidebar */}
         {selectedElement && (
-          <Card className="w-80 shadow-sm bg-white flex flex-col border-slate-200 h-full">
+          <Card className="flex h-full w-80 flex-col shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 border-b p-4">
               <CardTitle className="text-base font-medium">
                 {selectedElement.type === 'node' ? 'Détails du Nœud' : 'Détails de la Relation'}
@@ -247,11 +257,13 @@ const GraphPage = () => {
                 <X className="h-4 w-4" />
               </Button>
             </CardHeader>
-            <CardContent className="flex-1 overflow-y-auto p-4">
-              <div className="grid gap-1">
-                {renderProperties(selectedElement.data)}
-              </div>
-            </CardContent>
+            <ScrollArea className="min-h-0 flex-1">
+              <CardContent className="p-4">
+                <div className="grid gap-1">
+                  {renderProperties(selectedElement.data)}
+                </div>
+              </CardContent>
+            </ScrollArea>
           </Card>
         )}
       </div>

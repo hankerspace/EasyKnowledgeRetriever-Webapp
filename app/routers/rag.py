@@ -66,6 +66,37 @@ async def get_ingest_status():
     return ingest_state.as_dict()
 
 
+@router.get("/documents")
+async def list_documents():
+    """Documents known to the library's status store, newest first.
+
+    Polled by the Documents page during startup, so it never 4xxs: an
+    uninitialized RAG is an empty list with a message.
+    """
+    if not rag_state.is_initialized:
+        return {"total": 0, "documents": [], "message": "RAG is not initialized yet."}
+    try:
+        rows, total = await rag_state.rag.doc_status.get_docs_paginated(page_size=200)
+    except Exception as e:
+        logger.error(f"Could not list documents: {e}", exc_info=True)
+        return {"total": 0, "documents": [], "message": f"Could not read document statuses: {e}"}
+
+    docs = []
+    for doc_id, d in rows:
+        status = getattr(d, "status", "")
+        docs.append({
+            "id": doc_id,
+            "file_path": getattr(d, "file_path", "") or doc_id,
+            "status": getattr(status, "value", status),
+            "chunks_count": getattr(d, "chunks_count", None),
+            "content_length": getattr(d, "content_length", None),
+            "created_at": getattr(d, "created_at", None),
+            "updated_at": getattr(d, "updated_at", None),
+            "error_msg": getattr(d, "error_msg", None),
+        })
+    return {"total": total, "documents": docs, "message": ""}
+
+
 @router.post("/ingest", response_model=InitializeResponse)
 async def trigger_ingest(background_tasks: BackgroundTasks):
     """Re-scan the source directory and ingest new documents.
