@@ -14,18 +14,18 @@ import SourceRail from './SourceRail'
 import ChunkSheet from './ChunkSheet'
 import CopyButton from './CopyButton'
 
-function Block({ text, citations, labelFor, onCite, streaming }) {
+function Block({ text, citations, labelFor, onCite, streaming, knownIds }) {
   const components = useMemo(
     () => ({
       a: ({ href, children, ...props }) => {
         if (href?.startsWith('#cite?')) {
           const p = new URLSearchParams(href.slice(6))
-          const page = p.get('page')
+          const pages = (p.get('pages') || '').split(',').filter(Boolean).map(Number)
           return (
             <button
               type="button"
-              onClick={() => onCite({ id: p.get('id'), page: page != null ? Number(page) : null })}
-              title={`Source ${p.get('id')}${page ? `, page ${page}` : ''}`}
+              onClick={() => onCite({ id: p.get('id'), page: pages.length ? pages : null })}
+              title={`Source ${p.get('id')}${pages.length ? `, page${pages.length > 1 ? 's' : ''} ${pages.join(', ')}` : ''}`}
               className="mx-0.5 inline-flex h-4 min-w-4 -translate-y-0.5 items-center justify-center rounded border border-primary/30 bg-primary/10 px-1 align-middle font-mono text-[10px] font-semibold leading-none text-primary no-underline transition-colors hover:bg-primary hover:text-primary-foreground"
             >
               {children}
@@ -37,10 +37,11 @@ function Block({ text, citations, labelFor, onCite, streaming }) {
     }),
     [onCite],
   )
+  const linked = useMemo(() => linkifyCitations(text, knownIds), [text, knownIds])
   return (
     <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_13rem] md:gap-4">
       <div className={cn('prose prose-sm max-w-none dark:prose-invert prose-p:my-1.5 prose-li:my-0.5 prose-headings:mt-3 prose-headings:mb-1.5 prose-pre:my-2', streaming && 'last:after:ml-0.5 last:after:inline-block last:after:h-3.5 last:after:w-0.5 last:after:animate-blink last:after:bg-primary last:after:align-middle')}>
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{linkifyCitations(text)}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{linked}</ReactMarkdown>
       </div>
       <SourceRail citations={citations} labelFor={labelFor} onOpen={onCite} className="md:border-l md:pl-3" />
     </div>
@@ -54,10 +55,18 @@ export default function AnswerCard({ msg }) {
   const chunks = msg.context?.chunks || []
   const ctxRefs = msg.context?.references || []
 
+  // Ids the model may legitimately cite: from the retrieved context, else from its own reference list.
+  const knownIds = useMemo(() => {
+    const ids = new Set(ctxRefs.map((r) => String(r.reference_id)))
+    if (ids.size) return ids
+    const { references } = splitReferences(normalizeAnswer(msg.content))
+    return references.length ? new Set(references.map((r) => r.id)) : undefined
+  }, [ctxRefs, msg.content])
+
   const { body, references, blocks } = useMemo(() => {
     const { body, references } = splitReferences(normalizeAnswer(msg.content))
-    return { body, references, blocks: splitBlocks(body) }
-  }, [msg.content])
+    return { body, references, blocks: splitBlocks(body, knownIds) }
+  }, [msg.content, knownIds])
 
   const labelFor = useMemo(() => {
     const byId = new Map()
@@ -97,7 +106,7 @@ export default function AnswerCard({ msg }) {
         {blocks.length > 0 && (
           <div className="space-y-2">
             {blocks.map((b, i) => (
-              <Block key={i} text={b.text} citations={b.citations} labelFor={labelFor} onCite={setCite} streaming={streaming && i === blocks.length - 1} />
+              <Block key={i} text={b.text} citations={b.citations} labelFor={labelFor} onCite={setCite} knownIds={knownIds} streaming={streaming && i === blocks.length - 1} />
             ))}
           </div>
         )}

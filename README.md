@@ -15,6 +15,21 @@ library: configure a RAG pipeline, ingest documents, explore the knowledge base
 
 Configuration is **environment-only**. There is no configuration API.
 
+## API surface used by the UI
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /query` | One-shot JSON answer, with the chunks and references the answer cites. |
+| `POST /query/stream` | Same request, answered as Server-Sent Events: `status` (`retrieving` → `generating`), `context` (chunks, references, entity/relation counts), `token`, `done`, `error`. |
+| `GET /rag/ingest/status` | Progress of the ingestion pass (files seen / ingested / failed, current file, errors). |
+| `GET /rag/documents` | Documents in the library's status store (status, chunk count, size, timestamps, error). |
+| `POST /rag/ingest` | Re-scan the source directory in the background (409 while a pass is running). |
+
+The frontend (`frontend/`) is built on [shadcn/ui](https://ui.shadcn.com): the
+Assistant page streams answers and shows, next to each passage, the document
+and page that support it; clicking a citation opens the verbatim of the
+retrieved chunk(s). The Documents page follows ingestion live.
+
 ## Quick start (Docker, recommended)
 
 ```bash

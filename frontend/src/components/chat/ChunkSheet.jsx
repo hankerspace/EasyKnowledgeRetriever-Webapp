@@ -10,7 +10,8 @@ import { chunksFor, fileName } from '@/lib/citations'
 export default function ChunkSheet({ target, chunks, labelFor, onClose }) {
   const open = !!target
   const matches = target ? chunksFor(chunks, target.id, target.page) : []
-  const exact = target?.page != null && matches.some((c) => c.page_start != null)
+  const pages = target?.page == null ? [] : [].concat(target.page)
+  const exact = pages.length > 0 && matches.some((c) => c.page_start != null)
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
@@ -21,10 +22,10 @@ export default function ChunkSheet({ target, chunks, labelFor, onClose }) {
             <span className="truncate">{target ? labelFor(target.id) : ''}</span>
           </SheetTitle>
           <SheetDescription>
-            {target?.page != null ? `Cité page ${target.page}` : 'Cité sans numéro de page'}
+            {pages.length ? `Cité page${pages.length > 1 ? 's' : ''} ${pages.join(', ')}` : 'Cité sans numéro de page'}
             {' · '}
             {matches.length} extrait{matches.length > 1 ? 's' : ''}
-            {target?.page != null && !exact && matches.length > 0 && ' (page non localisée, tous les extraits du document)'}
+            {pages.length > 0 && !exact && matches.length > 0 && ' (page non localisée, tous les extraits du document)'}
           </SheetDescription>
         </SheetHeader>
         <ScrollArea className="min-h-0 flex-1">
