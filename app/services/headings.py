@@ -99,6 +99,9 @@ async def backfill(working_dir: str) -> int:
                 updated[chunk_id] = {**record, "heading": heading}
     await rag.text_chunks.upsert(updated)
     await rag.chunks_vdb.upsert(updated)
+    # upsert only changes the in-memory stores; ingestion writes them with index_done_callback
+    await rag.text_chunks.index_done_callback()
+    await rag.chunks_vdb.index_done_callback()
     await state.finalize()
     return len(updated)
 
