@@ -150,6 +150,11 @@ async def _stream_events(request: QueryRequest) -> AsyncIterator[str]:
     try:
         param = _build_param(request, stream=True)
         result = await rag_state.rag.aquery(request.query, param=param, retrieval=HybridMixRetrieval())
+        if getattr(result, "status", "success") == "failure":
+            # The library swallows retrieval/LLM errors into a failure result;
+            # its message is the only trace the user gets.
+            yield _sse("error", {"message": getattr(result, "message", "") or "Query failed"})
+            return
         data = _serialize_result(result)
         data["retrieval_seconds"] = round(time.monotonic() - started, 2)
         content = data.pop("content", "")

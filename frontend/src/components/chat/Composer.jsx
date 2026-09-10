@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useState } from 'react'
 import { ArrowUp, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -6,14 +6,6 @@ import { cn } from '@/lib/utils'
 
 export default function Composer({ onSend, onStop, busy, disabled, placeholder }) {
   const [value, setValue] = useState('')
-  const ref = useRef(null)
-
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    el.style.height = '0px'
-    el.style.height = Math.min(el.scrollHeight, 200) + 'px'
-  }, [value])
 
   const submit = () => {
     const q = value.trim()
@@ -31,8 +23,8 @@ export default function Composer({ onSend, onStop, busy, disabled, placeholder }
         disabled && 'opacity-60',
       )}
     >
+      {/* ponytail: native field-sizing grows the box with its content; older Safari keeps one scrolling row. */}
       <Textarea
-        ref={ref}
         rows={1}
         value={value}
         disabled={disabled}
@@ -41,7 +33,7 @@ export default function Composer({ onSend, onStop, busy, disabled, placeholder }
         onKeyDown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit() }
         }}
-        className="min-h-0 resize-none border-0 bg-transparent px-2 py-2 shadow-none focus-visible:ring-0"
+        className="max-h-[200px] min-h-0 resize-none border-0 bg-transparent px-2 py-2 shadow-none [field-sizing:content] focus-visible:ring-0"
       />
       {busy ? (
         <Button type="button" size="icon" variant="secondary" onClick={onStop} aria-label="Arrêter la génération" className="shrink-0 rounded-xl">
