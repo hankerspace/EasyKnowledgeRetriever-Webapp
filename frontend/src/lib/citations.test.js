@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { splitReferences, parseCitations, chunksFor, splitBlocks } from './citations.js';
+import { splitReferences, parseCitations, chunksFor, splitBlocks, linkifyCitations } from './citations.js';
 
 const answer = `L'AI Act classe les systèmes par niveau de risque [1, page 12].
 
@@ -49,6 +49,13 @@ test('parseCitations handles plural pages and bare page numbers when ids are kno
   assert.deepEqual(parseCitations('[1, pages 54, 427, 431]'), [{ id: '1', page: 54 }, { id: '1', page: 427 }, { id: '1', page: 431 }]);
   assert.deepEqual(parseCitations('[1, 242]', new Set(['1'])), [{ id: '1', page: 242 }]);
   assert.deepEqual(parseCitations('[1, 2]', new Set(['1', '2'])), [{ id: '1', page: null }, { id: '2', page: null }]);
+});
+
+test('parseCitations treats "page non spécifiée" as no page', () => {
+  assert.deepEqual(parseCitations('x [1, page non spécifiée] y [2, page inconnue; 3, page 4]'), [
+    { id: '1', page: null }, { id: '2', page: null }, { id: '3', page: 4 },
+  ]);
+  assert.equal(linkifyCitations('[1, page non spécifiée]'), '[1](#cite?id=1)');
 });
 
 test('parseCitations dedupes and ignores markdown links / years', () => {

@@ -48,7 +48,7 @@ function Block({ text, citations, labelFor, onCite, streaming, knownIds }) {
   )
 }
 
-export default function AnswerCard({ msg }) {
+export default function AnswerCard({ msg, admin = false }) {
   const [cite, setCite] = useState(null)
   const [openDetails, setOpenDetails] = useState(false)
   const streaming = msg.status === 'streaming'
@@ -93,7 +93,7 @@ export default function AnswerCard({ msg }) {
         <Sparkles className="size-3.5" />
       </div>
       <Card className="min-w-0 flex-1 space-y-4 p-4 shadow-sm sm:p-5">
-        <ProgressStepper msg={msg} />
+        <ProgressStepper msg={msg} admin={admin} />
 
         {msg.status === 'error' && (
           <Alert variant="destructive">
@@ -145,7 +145,7 @@ export default function AnswerCard({ msg }) {
             {!streaming && (
               <div className="flex flex-wrap items-center gap-1">
                 <CopyButton text={body} label="Copier la réponse" size="sm" className="h-7 gap-1.5 px-2 text-xs text-muted-foreground" />
-                {msg.details && (
+                {admin && msg.details && (
                   <Collapsible open={openDetails} onOpenChange={setOpenDetails} className="w-full">
                     <CollapsibleTrigger asChild>
                       <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs text-muted-foreground">
