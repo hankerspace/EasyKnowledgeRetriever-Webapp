@@ -3,7 +3,8 @@
 // it runs under `node --test`.
 
 const REF_HEADER = /\n+\s*(?:#{1,6}\s*|\*\*|__)?\s*(?:references?|sources?|r[ée]f[ée]rences?)\s*(?:\*\*|__)?\s*:?\s*\n/i;
-const REF_LINE = /^\s*(?:[-*+]\s*)?\[(\d+)\]\s*(.*?)\s*(?:\((?:page|p\.?)\s*(\d+)\))?\s*$/i;
+// `[1] Title (Page 5)`, `[1] Title (Pages 12, 48–54)`, `[1] Title`
+const REF_LINE = /^\s*(?:[-*+]\s*)?\[(\d+)\]\s*(.*?)\s*(?:\((?:pages?|p\.?)\s*(\d+)[^)]*\))?\s*$/i;
 
 export function splitReferences(markdown) {
   const text = typeof markdown === 'string' ? markdown : '';

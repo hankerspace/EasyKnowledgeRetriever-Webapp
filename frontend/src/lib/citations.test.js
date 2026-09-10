@@ -26,6 +26,12 @@ test('splitReferences tolerates a bold/plain header and star bullets', () => {
   assert.deepEqual(references, [{ id: '1', title: 'Doc A', page: 3 }]);
 });
 
+test('splitReferences accepts a plural page list and keeps the first page', () => {
+  const { body, references } = splitReferences('Texte [1].\n\n## References\n\n* [1] /app/data/doc.pdf (Pages 12, 15, 48–54, 431–433)\n');
+  assert.equal(body, 'Texte [1].');
+  assert.deepEqual(references, [{ id: '1', title: '/app/data/doc.pdf', page: 12 }]);
+});
+
 test('splitReferences leaves text without references alone', () => {
   const { body, references } = splitReferences('Juste du texte [1].');
   assert.equal(body, 'Juste du texte [1].');
