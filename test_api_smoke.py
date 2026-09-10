@@ -151,7 +151,7 @@ def test_query_validates_the_retrieval_mode():
     from app.models.query import QueryRequest
     from app.routers.query import _build_param
 
-    assert QueryRequest(query="q").mode == "naive"
+    assert QueryRequest(query="q").mode == "hybrid_mix"
     param = _build_param(QueryRequest(query="q", mode="naive", top_k=5, chunk_top_k=3), stream=True)
     assert (param.mode, param.top_k, param.chunk_top_k, param.stream) == ("naive", 5, 3, True)
     with TestClient(app) as client:
