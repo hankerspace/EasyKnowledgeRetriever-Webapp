@@ -22,6 +22,7 @@ class IngestState:
     status: str = "idle"  # idle | scanning | running | completed | failed
     total: int = 0
     ingested: int = 0
+    existing: int = 0  # found in the store already, not re-parsed
     failed: int = 0
     current_file: Optional[str] = None
     errors: List[Dict[str, str]] = field(default_factory=list)
@@ -66,6 +67,25 @@ def scan_source_directory(source_dir: str, extensions: List[str]) -> List[str]:
     return sorted(found)
 
 
+async def already_ingested(rag, path: str) -> bool:
+    """True when the store holds a PROCESSED document for this exact path.
+
+    The library only deduplicates by content hash, i.e. after a full MinerU
+    parse (hours on a big PDF). Checking the path first makes a restart free.
+    ponytail: a file modified in place under the same name is skipped too;
+    delete its entry from the doc-status store (or rename it) to re-ingest.
+    """
+    try:
+        found = await rag.doc_status.get_doc_by_file_path(path)
+    except Exception as exc:  # a broken lookup must not block ingestion
+        logger.warning("Could not look up %s in the doc-status store: %s", path, exc)
+        return False
+    if not found:
+        return False
+    status = found[1].get("status")
+    return getattr(status, "value", status) == "processed"
+
+
 async def ingest_source_directory(
     source_dir: str,
     extensions: List[str],
@@ -85,7 +105,7 @@ async def ingest_source_directory(
     async with _ingest_lock:
         state = ingest_state
         state.status = "scanning"
-        state.ingested = state.failed = state.total = 0
+        state.ingested = state.existing = state.failed = state.total = 0
         state.errors = []
         state.skipped = []
         state.current_file = None
@@ -125,6 +145,10 @@ async def ingest_source_directory(
         logger.info("Found %d document(s) to ingest in %s", len(files), source_dir)
 
         for path in files:
+            if await already_ingested(rag_state.rag, path):
+                state.existing += 1
+                logger.info("Skipping %s: already in the knowledge base", path)
+                continue
             state.current_file = path
             try:
                 logger.info("Ingesting %s ...", path)
@@ -151,7 +175,8 @@ async def ingest_source_directory(
 
         state.status = "completed"
         state.message = (
-            f"Ingested {state.ingested}/{state.total} document(s), {state.failed} failed."
+            f"Ingested {state.ingested}/{state.total} document(s), "
+            f"{state.existing} already present, {state.failed} failed."
         )
         logger.info(state.message)
         return state

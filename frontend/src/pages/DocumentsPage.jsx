@@ -57,7 +57,8 @@ export default function DocumentsPage() {
     } finally { setStarting(false) }
   }
 
-  const pct = status?.total ? Math.round((status.ingested / status.total) * 100) : 0
+  const done = (status?.ingested || 0) + (status?.existing || 0)
+  const pct = status?.total ? Math.round((done / status.total) * 100) : 0
   const passState = status?.status
   const PassIcon = isActive ? Loader2 : passState === 'failed' ? CircleAlert : passState === 'completed' ? CircleCheck : Clock
 
@@ -87,6 +88,7 @@ export default function DocumentsPage() {
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">
                       {status.ingested}/{status.total} fichier{status.total > 1 ? 's' : ''} ingéré{status.ingested > 1 ? 's' : ''}
+                      {status.existing > 0 && <span> · {status.existing} déjà indexé{status.existing > 1 ? 's' : ''}</span>}
                       {status.failed > 0 && <span className="text-destructive"> · {status.failed} en échec</span>}
                     </span>
                     <span className="font-medium tabular-nums">{pct}%</span>

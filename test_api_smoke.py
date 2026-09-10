@@ -147,6 +147,27 @@ def test_scan_finds_only_supported_files():
     assert found == ["a.pdf", "b.txt", "d.md"], found
 
 
+def test_already_ingested_matches_processed_docs_by_path():
+    """A document already in the store must not go through MinerU again."""
+    import asyncio
+    from app.services.ingest_service import already_ingested
+
+    class Store:
+        async def get_doc_by_file_path(self, path):
+            return {
+                "/data/done.pdf": ("doc-1", {"status": "processed", "file_path": path}),
+                "/data/broken.pdf": ("doc-2", {"status": "failed", "file_path": path}),
+            }.get(path)
+
+    class Rag:
+        doc_status = Store()
+
+    run = asyncio.run
+    assert run(already_ingested(Rag(), "/data/done.pdf")) is True
+    assert run(already_ingested(Rag(), "/data/broken.pdf")) is False   # retry failures
+    assert run(already_ingested(Rag(), "/data/new.pdf")) is False
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failures = 0
