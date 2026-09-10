@@ -147,6 +147,19 @@ def test_scan_finds_only_supported_files():
     assert found == ["a.pdf", "b.txt", "d.md"], found
 
 
+def test_query_validates_the_retrieval_mode():
+    from app.models.query import QueryRequest
+    from app.routers.query import _build_param
+
+    assert QueryRequest(query="q").mode == "hybrid_mix"
+    param = _build_param(QueryRequest(query="q", mode="naive", top_k=5, chunk_top_k=3), stream=True)
+    assert (param.mode, param.top_k, param.chunk_top_k, param.stream) == ("naive", 5, 3, True)
+    with TestClient(app) as client:
+        # Validation happens before the RAG check: 422, not 400.
+        assert client.post("/query", json={"query": "x", "mode": "quantum"}).status_code == 422
+        assert client.post("/query/stream", json={"query": "x", "top_k": 0}).status_code == 422
+
+
 def test_already_ingested_matches_processed_docs_by_path():
     """A document already in the store must not go through MinerU again."""
     import asyncio

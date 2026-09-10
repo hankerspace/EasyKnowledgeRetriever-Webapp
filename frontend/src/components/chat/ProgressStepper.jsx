@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Check, Loader2, Search, PenLine, CircleAlert } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { modeLabel } from '@/lib/retrieval'
 
 function useElapsed(startedAt, endedAt) {
   const [now, setNow] = useState(Date.now())
@@ -43,9 +44,10 @@ export default function ProgressStepper({ msg }) {
   const retrievalState = ctx ? 'done' : msg.status === 'error' ? 'error' : 'active'
   const genState = !ctx ? 'pending' : msg.status === 'error' ? 'error' : finished ? 'done' : 'active'
 
+  const modeTag = msg.settings ? `${modeLabel(msg.settings.mode)} · top k ${msg.settings.top_k}` : null
   const retrievalDetail = ctx
     ? `${ctx.entities} entité${ctx.entities > 1 ? 's' : ''} · ${ctx.relationships} relation${ctx.relationships > 1 ? 's' : ''} · ${ctx.chunks.length} extrait${ctx.chunks.length > 1 ? 's' : ''}${ctx.retrieval_seconds != null ? ` · ${ctx.retrieval_seconds}s` : ''}`
-    : 'Analyse de la question, recherche dans le graphe et les vecteurs…'
+    : `Analyse de la question, recherche dans la base${modeTag ? ` (${modeTag})` : ''}…`
   const genDetail = ctx
     ? `${msg.tokens} fragment${msg.tokens > 1 ? 's' : ''} reçu${msg.tokens > 1 ? 's' : ''} · ${(msg.total_seconds ?? elapsed).toFixed(1)}s`
     : null
@@ -55,6 +57,7 @@ export default function ProgressStepper({ msg }) {
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-1"><Check className="size-3 text-success" /> Réponse générée en {(msg.total_seconds ?? elapsed).toFixed(1)}s</span>
         {ctx && <span>{ctx.chunks.length} extrait{ctx.chunks.length > 1 ? 's' : ''} · {ctx.entities} entité{ctx.entities > 1 ? 's' : ''} · {ctx.relationships} relation{ctx.relationships > 1 ? 's' : ''}</span>}
+        {modeTag && <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">{modeTag}</span>}
       </div>
     )
   }

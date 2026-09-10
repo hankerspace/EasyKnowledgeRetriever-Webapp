@@ -7,6 +7,8 @@ import { getHealth, streamQuery } from '@/lib/api'
 import { useIngestStatus } from '@/hooks/use-ingest-status'
 import Composer from '@/components/chat/Composer'
 import AnswerCard from '@/components/chat/AnswerCard'
+import RetrievalSettings from '@/components/chat/RetrievalSettings'
+import { loadSettings, saveSettings } from '@/lib/retrieval'
 
 const SUGGESTIONS = [
   'Quels sont les points clés abordés dans les documents ?',
@@ -20,6 +22,8 @@ export default function ChatPage() {
   const [messages, setMessages] = useState([])
   const [health, setHealth] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [settings, setSettings] = useState(loadSettings)
+  const updateSettings = (s) => { setSettings(s); saveSettings(s) }
   const abortRef = useRef(null)
   const bottomRef = useRef(null)
   const { status: ingest, isActive: ingesting } = useIngestStatus()
@@ -47,13 +51,13 @@ export default function ChatPage() {
     setMessages((ms) => [
       ...ms,
       { id: id - 0.5, role: 'user', content: query },
-      { id, role: 'assistant', content: '', status: 'streaming', tokens: 0, startedAt: Date.now(), context: null },
+      { id, role: 'assistant', content: '', status: 'streaming', tokens: 0, startedAt: Date.now(), context: null, settings },
     ])
     setBusy(true)
     const ctrl = new AbortController()
     abortRef.current = ctrl
     try {
-      await streamQuery({ query, conversation_history: history.length ? history : null }, {
+      await streamQuery({ query, conversation_history: history.length ? history : null, ...settings }, {
         status: (d) => patch(id, () => ({ stage: d.stage })),
         context: (d) => patch(id, () => ({ context: d })),
         token: (d) => patch(id, (m) => ({ content: m.content + d.text, tokens: m.tokens + 1 })),
@@ -129,7 +133,7 @@ export default function ChatPage() {
       </div>
       <div className="border-t bg-background/80 backdrop-blur">
         <div className="mx-auto w-full max-w-4xl px-4 py-3 sm:px-6">
-          <Composer onSend={send} onStop={() => abortRef.current?.abort()} busy={busy} disabled={!ready} placeholder={ready ? 'Posez votre question… (Entrée pour envoyer, Maj+Entrée pour un retour à la ligne)' : 'En attente du moteur RAG…'} />
+          <Composer leading={<RetrievalSettings value={settings} onChange={updateSettings} disabled={busy} />} onSend={send} onStop={() => abortRef.current?.abort()} busy={busy} disabled={!ready} placeholder={ready ? 'Posez votre question… (Entrée pour envoyer, Maj+Entrée pour un retour à la ligne)' : 'En attente du moteur RAG…'} />
           <p className="mt-1.5 text-center text-[11px] text-muted-foreground">Les réponses sont générées à partir de vos documents et citent leurs sources. Vérifiez les passages importants.</p>
         </div>
       </div>
