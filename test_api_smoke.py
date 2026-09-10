@@ -198,6 +198,25 @@ def test_query_decomposition_is_off_by_default():
     assert QueryRequest(query="x").query_decomposition is False
 
 
+def test_legal_headings_follow_chapters_articles_and_annexes():
+    """Each chunk gets the chapter/section/article or annex it belongs to."""
+    from app.services.headings import derive_headings
+
+    heads = derive_headings([
+        "(1) considérant\nCHAPITRE III\nSYSTÈMES D'IA À HAUT RISQUE\nSection 1\nClassification de systèmes d'IA",
+        "Article 6\nRègles relatives à la classification\n1. Un système d'IA...",
+        "suite de l'article 6",
+        "Article 19 Journaux générés automatiquement\n1. Les fournisseurs...",
+        "ANNEXE III\nSystèmes d'IA à haut risque visés à l'article 6\n1. Biométrie",
+        "2. Infrastructures critiques",
+    ])
+    crumb = "Chapitre III — Systèmes d'IA à haut risque > Section 1 — Classification de systèmes d'IA"
+    assert heads[0] == "Considérants", heads
+    assert heads[1] == heads[2] == f"{crumb} > Article 6 — Règles relatives à la classification", heads
+    assert heads[3] == f"{crumb} > Article 19 — Journaux générés automatiquement", heads
+    assert heads[4] == heads[5] == "Annexe III — Systèmes d'IA à haut risque visés à l'article 6", heads
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failures = 0

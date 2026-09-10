@@ -279,9 +279,11 @@ def _chunking_on_marker(marker: str):
     """The library's chunker, with a section marker forced in (ingest() does not expose one)."""
     from easy_knowledge_retriever.operations.chunking import chunking_by_token_size
 
+    from app.services.headings import add_headings
+
     def chunk(tokenizer, content, split_by_character, split_by_character_only, overlap, size, pages=None):
-        return chunking_by_token_size(tokenizer, content, split_by_character or marker,
-                                      split_by_character_only, overlap, size, pages=pages)
+        return add_headings(chunking_by_token_size(tokenizer, content, split_by_character or marker,
+                                                   split_by_character_only, overlap, size, pages=pages))
 
     return chunk
 
