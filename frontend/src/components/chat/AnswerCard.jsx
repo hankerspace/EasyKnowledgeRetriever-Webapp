@@ -39,11 +39,11 @@ function Block({ text, citations, labelFor, onCite, streaming, knownIds }) {
   )
   const linked = useMemo(() => linkifyCitations(text, knownIds), [text, knownIds])
   return (
-    <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_13rem] md:gap-4">
+    <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_13rem] lg:gap-4">
       <div className={cn('prose prose-sm max-w-none dark:prose-invert prose-p:my-1.5 prose-li:my-0.5 prose-headings:mt-3 prose-headings:mb-1.5 prose-pre:my-2', streaming && 'last:after:ml-0.5 last:after:inline-block last:after:h-3.5 last:after:w-0.5 last:after:animate-blink last:after:bg-primary last:after:align-middle')}>
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{linked}</ReactMarkdown>
       </div>
-      <SourceRail citations={citations} labelFor={labelFor} onOpen={onCite} className="md:border-l md:pl-3" />
+      <SourceRail citations={citations} labelFor={labelFor} onOpen={onCite} className="lg:border-l lg:pl-3" />
     </div>
   )
 }

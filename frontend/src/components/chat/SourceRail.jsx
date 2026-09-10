@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 export default function SourceRail({ citations, labelFor, onOpen, className }) {
   if (!citations?.length) return null
   return (
-    <div className={cn('flex flex-wrap gap-1.5 md:flex-col md:items-start', className)}>
+    <div className={cn('flex flex-wrap gap-1.5 lg:flex-col lg:items-start', className)}>
       {citations.map((c) => (
         <button
           key={`${c.id}:${c.page}`}

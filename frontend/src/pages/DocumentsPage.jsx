@@ -163,9 +163,9 @@ export default function DocumentsPage() {
                           {d.error_msg && <span className="block truncate text-xs text-destructive" title={d.error_msg}>{d.error_msg}</span>}
                         </TableCell>
                         <TableCell><DocStatusBadge status={d.status} /></TableCell>
-                        <TableCell className="text-right tabular-nums">{d.chunks_count ?? '—'}</TableCell>
-                        <TableCell className="text-right tabular-nums text-muted-foreground">{fmtChars(d.content_length)}</TableCell>
-                        <TableCell className="text-right text-muted-foreground">{fmtDate(d.updated_at)}</TableCell>
+                        <TableCell className="whitespace-nowrap text-right tabular-nums">{d.chunks_count ?? '—'}</TableCell>
+                        <TableCell className="whitespace-nowrap text-right tabular-nums text-muted-foreground">{fmtChars(d.content_length)}</TableCell>
+                        <TableCell className="whitespace-nowrap text-right text-muted-foreground">{fmtDate(d.updated_at)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
