@@ -100,3 +100,19 @@ export function chunksFor(chunks, id, page) {
 export function fileName(path) {
   return (path || '').split(/[\\/]/).pop() || path || '';
 }
+
+// Rewrite each citation into markdown links the renderer turns into badges:
+// `[1, page 2; 3]` -> `[1](#cite?id=1&page=2)[3](#cite?id=3)`.
+export function linkifyCitations(text) {
+  return (text || '').replace(CITATION, (m, group) => {
+    if (Number(group.split(/[,;]/)[0]) > 999) return m
+    return parseGroup(group)
+      .map((c) => `[${c.id}](#cite?id=${c.id}${c.page != null ? `&page=${c.page}` : ''})`)
+      .join('')
+  })
+}
+
+// The LLM sometimes escapes newlines or breaks "1. \n item" lists.
+export function normalizeAnswer(text) {
+  return (text || '').replace(/\\n/g, '\n').replace(/\\r/g, '').replace(/(^|\n)(\d+\.)\s*\n\s*/g, '$1$2 ')
+}

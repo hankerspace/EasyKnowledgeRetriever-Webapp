@@ -1,0 +1,55 @@
+import React from 'react'
+import { FileText, Quote } from 'lucide-react'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import CopyButton from './CopyButton'
+import { chunksFor, fileName } from '@/lib/citations'
+
+/** Verbatim of the chunk(s) behind one citation. `target` = {id, page} | null. */
+export default function ChunkSheet({ target, chunks, labelFor, onClose }) {
+  const open = !!target
+  const matches = target ? chunksFor(chunks, target.id, target.page) : []
+  const exact = target?.page != null && matches.some((c) => c.page_start != null)
+  return (
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
+        <SheetHeader className="border-b p-5 text-left">
+          <SheetTitle className="flex items-center gap-2 text-base">
+            <span className="flex size-6 items-center justify-center rounded bg-primary/10 font-mono text-xs font-semibold text-primary">{target?.id}</span>
+            <FileText className="size-4 text-muted-foreground" />
+            <span className="truncate">{target ? labelFor(target.id) : ''}</span>
+          </SheetTitle>
+          <SheetDescription>
+            {target?.page != null ? `Cité page ${target.page}` : 'Cité sans numéro de page'}
+            {' · '}
+            {matches.length} extrait{matches.length > 1 ? 's' : ''}
+            {target?.page != null && !exact && matches.length > 0 && ' (page non localisée, tous les extraits du document)'}
+          </SheetDescription>
+        </SheetHeader>
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="space-y-4 p-5">
+            {matches.length === 0 && (
+              <p className="text-sm text-muted-foreground">Aucun extrait correspondant dans le contexte de cette réponse.</p>
+            )}
+            {matches.map((c, i) => (
+              <figure key={c.chunk_id || i} className="rounded-lg border bg-muted/30">
+                <div className="flex items-center gap-2 border-b px-3 py-2 text-xs text-muted-foreground">
+                  <Quote className="size-3.5" />
+                  <span className="truncate">{fileName(c.file_path)}</span>
+                  {c.page_start != null && (
+                    <Badge variant="secondary" className="ml-auto font-normal">
+                      {c.page_end != null && c.page_end !== c.page_start ? `p. ${c.page_start}–${c.page_end}` : `p. ${c.page_start}`}
+                    </Badge>
+                  )}
+                  <CopyButton text={c.content} className={c.page_start == null ? 'ml-auto size-7' : 'size-7'} />
+                </div>
+                <blockquote className="whitespace-pre-wrap p-3 text-sm leading-relaxed">{c.content}</blockquote>
+              </figure>
+            ))}
+          </div>
+        </ScrollArea>
+      </SheetContent>
+    </Sheet>
+  )
+}

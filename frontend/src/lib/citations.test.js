@@ -68,3 +68,8 @@ test('chunksFor narrows to the cited page range, else the whole reference', () =
   assert.deepEqual(chunksFor(chunks, '2', 3).map((c) => c.chunk_id), ['c']);
   assert.deepEqual(chunksFor(chunks, '9', null), []);
 });
+
+test('linkifyCitations turns markers into cite links, one per reference', async () => {
+  const { linkifyCitations } = await import('./citations.js')
+  assert.equal(linkifyCitations('x [1, page 2; 3] y [2024]'), 'x [1](#cite?id=1&page=2)[3](#cite?id=3) y [2024]')
+})
