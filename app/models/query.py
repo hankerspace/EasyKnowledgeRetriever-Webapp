@@ -78,14 +78,25 @@ class QueryResult(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
+RetrievalMode = Literal["local", "global", "hybrid", "mix", "hybrid_mix", "naive", "bypass"]
+
+
 class QueryRequest(BaseModel):
     """Request for querying the knowledge base"""
     query: str = Field(..., description="Query text")
+    mode: RetrievalMode = Field(
+        default="hybrid_mix",
+        description="Retrieval strategy: local (entities), global (relations), hybrid (both), "
+                    "mix (graph + vectors), hybrid_mix (vectors + BM25 + graph, RRF fusion), "
+                    "naive (vector search only), bypass (no retrieval, LLM only)",
+    )
+    chunk_top_k: Optional[int] = Field(default=None, ge=1, le=200, description="Chunks kept after reranking (defaults to top_k)")
+    response_type: Optional[str] = Field(default=None, description="e.g. 'Multiple Paragraphs', 'Single Paragraph', 'Bullet Points'")
     only_need_context: bool = Field(
         default=False, 
         description="If true, return only context without LLM generation"
     )
-    top_k: int = Field(default=10, description="Number of top results to retrieve")
+    top_k: int = Field(default=10, ge=1, le=200, description="Number of top results to retrieve")
     stream: bool = Field(default=False, description="Enable streaming response")
     include_references: bool = Field(default=True, description="Include references in response")
     query_decomposition: bool = Field(default=True, description="Enable query decomposition")

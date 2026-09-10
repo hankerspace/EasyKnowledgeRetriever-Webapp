@@ -26,13 +26,14 @@ const APP_SUBTITLE = window.env?.APP_SUBTITLE || 'Knowledge Retriever'
 function IngestPill() {
   const { status, isActive } = useIngestStatus()
   if (!status) return null
-  const pct = status.total ? Math.round((status.ingested / status.total) * 100) : 0
+  const done = status.ingested + (status.existing || 0)
+  const pct = status.total ? Math.round((done / status.total) * 100) : 0
   if (isActive) {
     return (
       <Link to="/documents">
         <Badge variant="outline" className="gap-1.5 font-normal text-muted-foreground hover:bg-accent">
           <Loader2 className="size-3 animate-spin text-primary" />
-          Ingestion {status.ingested}/{status.total} · {pct}%
+          Ingestion {done}/{status.total} · {pct}%
         </Badge>
       </Link>
     )
@@ -50,7 +51,7 @@ function IngestPill() {
     return (
       <Link to="/documents">
         <Badge variant="outline" className="gap-1.5 font-normal text-muted-foreground hover:bg-accent">
-          <CircleCheck className="size-3 text-success" /> {status.ingested} document{status.ingested > 1 ? 's' : ''}
+          <CircleCheck className="size-3 text-success" /> {done} document{done > 1 ? 's' : ''}
         </Badge>
       </Link>
     )

@@ -5,7 +5,6 @@ from dataclasses import asdict, is_dataclass
 from typing import Any, AsyncIterator, Dict, List
 
 from easy_knowledge_retriever import QueryParam
-from easy_knowledge_retriever.retrieval import HybridMixRetrieval
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
@@ -27,15 +26,20 @@ def _check_initialized():
 
 
 def _build_param(request: QueryRequest, stream: bool) -> QueryParam:
-    return QueryParam(
+    """The library's RetrievalFactory picks the strategy from param.mode."""
+    kwargs = dict(
+        mode=request.mode,
         top_k=request.top_k,
+        chunk_top_k=request.chunk_top_k,
         only_need_context=request.only_need_context,
         stream=stream,
         include_references=request.include_references,
         query_decomposition=request.query_decomposition,
-        conversation_history=request.conversation_history,
-        mode="hybrid_mix",
+        conversation_history=request.conversation_history or [],
     )
+    if request.response_type:
+        kwargs["response_type"] = request.response_type
+    return QueryParam(**kwargs)
 
 
 def _to_dicts(items: Any) -> List[Dict[str, Any]]:
@@ -87,11 +91,11 @@ def _sse(event: str, data: Dict[str, Any]) -> str:
 async def query(request: QueryRequest):
     """Query the knowledge base"""
     _check_initialized()
-    logger.info(f"Received query: '{request.query}' (Top K: {request.top_k})")
+    logger.info(f"Received query: '{request.query}' (mode: {request.mode}, top_k: {request.top_k})")
 
     try:
         param = _build_param(request, stream=False)
-        result = await rag_state.rag.aquery(request.query, param=param, retrieval=HybridMixRetrieval())
+        result = await rag_state.rag.aquery(request.query, param=param)
         logger.info("Query executed successfully.")
 
         if request.only_need_context:
@@ -149,7 +153,7 @@ async def _stream_events(request: QueryRequest) -> AsyncIterator[str]:
     yield _sse("status", {"stage": "retrieving"})
     try:
         param = _build_param(request, stream=True)
-        result = await rag_state.rag.aquery(request.query, param=param, retrieval=HybridMixRetrieval())
+        result = await rag_state.rag.aquery(request.query, param=param)
         if getattr(result, "status", "success") == "failure":
             # The library swallows retrieval/LLM errors into a failure result;
             # its message is the only trace the user gets.
@@ -200,7 +204,7 @@ async def query_stream(request: QueryRequest):
     metadata}, `error` {message}.
     """
     _check_initialized()
-    logger.info(f"Received streamed query: '{request.query}'")
+    logger.info(f"Received streamed query: '{request.query}' (mode: {request.mode})")
     return StreamingResponse(
         _stream_events(request),
         media_type="text/event-stream",

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
-export default function Composer({ onSend, onStop, busy, disabled, placeholder }) {
+export default function Composer({ onSend, onStop, busy, disabled, placeholder, leading }) {
   const [value, setValue] = useState('')
 
   const submit = () => {
@@ -23,6 +23,7 @@ export default function Composer({ onSend, onStop, busy, disabled, placeholder }
         disabled && 'opacity-60',
       )}
     >
+      {leading && <div className="flex shrink-0 items-center self-end pb-0.5">{leading}</div>}
       {/* ponytail: native field-sizing grows the box with its content; older Safari keeps one scrolling row. */}
       <Textarea
         rows={1}
