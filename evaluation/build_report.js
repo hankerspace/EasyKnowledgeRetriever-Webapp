@@ -31,12 +31,15 @@ const rankCell = r => (r.hit == null ? { t: 'n/a' }
 const CFG = {
   hybrid_mix: 'hybrid_mix (défaut)', naive: 'naive', mix: 'mix', hybrid: 'hybrid',
   hybrid_mix_decomp: 'hybrid_mix avec décomposition', hybrid_mix_repet2: 'hybrid_mix, 2e passage', hybrid_mix_repet3: 'hybrid_mix, 3e passage',
+  hybrid_mix_qwen_3_6_35b_instruct: 'hybrid_mix, générateur qwen-3.6-35b',
 };
 const CFG_SHORT = {
   hybrid_mix: 'hybrid_mix (défaut)', naive: 'naive', mix: 'mix', hybrid: 'hybrid',
   hybrid_mix_decomp: 'avec décomp.', hybrid_mix_repet2: '2e passage', hybrid_mix_repet3: '3e passage',
+  hybrid_mix_qwen_3_6_35b_instruct: 'générateur qwen',
 };
-const isRepeat = c => c.includes('_repet');
+// exclus du classement : passages répétés (variance) et générateur alternatif (latence = génération seule)
+const isRepeat = c => c.includes('_repet') || c.includes('qwen');
 const configs = Object.keys(CFG).filter(k => S.configs[k]);
 const D = S.configs.hybrid_mix;
 

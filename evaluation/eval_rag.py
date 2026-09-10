@@ -348,6 +348,8 @@ def run_one(item, cfg, chunks, client):
     # preuve dans le contexte réellement envoyé au LLM : prompt complet, chunks encodés en JSON
     full_ctx = norm(sp.replace("\\n", " ").replace('\\"', '"'))
     rec["ctx_hit"] = any(re.search(p, full_ctx, re.I) for p in evidence) if (evidence and sp) else None
+    if name == "hybrid_mix":  # gardés pour rejouer la génération avec un autre LLM (commande altgen)
+        rec["system_prompt"], rec["user_prompt"] = sp, a.get("user_prompt") or ""
     rec["judge"] = judge(client, q, ref, ctx, ans) if rec["success"] else {"error": "no answer"}
     print(f"{name:24} {qid} ok={rec['success']} {rec['latency_s']:6.1f}s hit={rec['hit']} facts={rec['fact_recall']} "
           f"judge={rec['judge'].get('correctness')}/{rec['judge'].get('faithfulness')}", flush=True)
@@ -455,6 +457,51 @@ def cmd_stats():
     print(json.dumps({k: v for k, v in out.items() if k not in ("top_entities", "entity_types")}, ensure_ascii=False))
 
 
+def cmd_altgen():
+    """Rejoue les prompts du défaut (même contexte récupéré) avec un autre générateur, puis juge.
+
+    EVAL_ALT_MODEL (défaut qwen-3.6-35b-instruct). Compare les LLM sans reconstruire le POC.
+    ponytail: latence = génération seule, non comparable à la latence de bout en bout des autres configs.
+    """
+    from openai import OpenAI
+    model = os.environ.get("EVAL_ALT_MODEL", "qwen-3.6-35b-instruct")
+    client = OpenAI(api_key=ENV["EKR_LLM_API_KEY"], base_url=ENV["EKR_LLM_BASE_URL"], timeout=300)
+    spec = {d[0]: d for d in DATASET}
+    chunks = load_chunks()
+    path = OUT / "results.jsonl"
+    rows = [json.loads(l) for l in path.read_text().splitlines()]
+    name = "hybrid_mix_" + re.sub(r"[^a-z0-9]+", "_", model.lower()).strip("_")
+    done = {r["qid"] for r in rows if r["config"] == name and r["success"]}
+    base = [r for r in rows if r["config"] == "hybrid_mix" and r.get("system_prompt") and r["qid"] not in done]
+
+    def one(b):
+        _, _, q, ref, evidence, _, _ = spec[b["qid"]]
+        t = time.time()
+        try:
+            out = client.chat.completions.create(model=model, temperature=0, messages=[
+                {"role": "system", "content": b["system_prompt"]},
+                {"role": "user", "content": b["user_prompt"]}]).choices[0].message.content or ""
+        except Exception as e:  # noqa: BLE001
+            out = ""
+            print("altgen error", b["qid"], e, flush=True)
+        ans = norm(out)
+        gold_pages = {chunks[g]["page"] for g in gold_for(evidence, chunks) if chunks[g]["page"] is not None} if evidence else set()
+        cited = {int(x) for x in re.findall(r"pages?\s*(\d+)", ans)}
+        rec = {k: v for k, v in b.items() if k not in ("system_prompt", "user_prompt")}
+        rec.update(config=name, success=bool(ans.strip()), error=None if ans.strip() else "empty", answer=ans,
+                   answer_chars=len(ans), latency_s=round(time.time() - t, 2), generation_only=True,
+                   has_citation=bool(re.search(r"\[\d", ans)), cited_pages=sorted(cited),
+                   citation_page_ok=(any(abs(x - g) <= 2 for x in cited for g in gold_pages) if cited else False) if gold_pages else None)
+        rec["judge"] = judge(client, q, ref, context_of({"system_prompt": b["system_prompt"]}), ans) if rec["success"] else {"error": "no answer"}
+        print(f"{name:24} {b['qid']} {rec['latency_s']:5.1f}s judge={rec['judge'].get('correctness')}", flush=True)
+        return rec
+
+    with ThreadPoolExecutor(4) as ex, open(path, "a") as f:
+        for rec in ex.map(one, base):
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            f.flush()
+
+
 def mean(xs):
     xs = [x for x in xs if x is not None]
     return round(statistics.mean(xs), 4) if xs else None
@@ -513,7 +560,8 @@ def cmd_report():
         "categories_default": {c: agg([r for r in default if r["category"] == c]) for c in dict.fromkeys(r["category"] for r in default)},
         "dataset": [{"qid": d[0], "category": d[1], "question": d[2], "reference": d[3], "gold_n": len(gold_for(d[4], ds)) if d[4] else 0,
                      "gold_pages": sorted({ds[g]["page"] for g in gold_for(d[4], ds)}) if d[4] else []} for d in DATASET],
-        "per_question_default": sorted(default, key=lambda r: r["qid"]),
+        "per_question_default": sorted(({k: v for k, v in r.items() if k not in ("system_prompt", "user_prompt")} for r in default),
+                                       key=lambda r: r["qid"]),
         "per_question_all": [{k: r.get(k) for k in ("qid", "config", "success", "latency_s", "hit", "first_rank", "fact_recall", "has_citation", "decomposed", "ctx_hit")}
                              | {"correctness": r["judge"].get("correctness"), "faithfulness": r["judge"].get("faithfulness"),
                                 "hallucination": r["judge"].get("hallucination")} for r in rows],
@@ -524,4 +572,4 @@ def cmd_report():
 
 
 if __name__ == "__main__":
-    {"check": cmd_check, "stats": cmd_stats, "run": cmd_run, "report": cmd_report}[sys.argv[1]]()
+    {"check": cmd_check, "stats": cmd_stats, "run": cmd_run, "altgen": cmd_altgen, "report": cmd_report}[sys.argv[1]]()
