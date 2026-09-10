@@ -1,7 +1,7 @@
 import React from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useTheme } from 'next-themes'
-import { MessageSquareText, FolderOpen, Waypoints, Sun, Moon, Loader2, CircleCheck, CircleAlert, Sparkles } from 'lucide-react'
+import { MessageSquareText, FolderOpen, Waypoints, Sun, Moon, Loader2, CircleCheck, CircleAlert, ShieldCheck, ExternalLink } from 'lucide-react'
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarInset,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger, SidebarRail,
@@ -15,13 +15,13 @@ import { useIngestStatus } from '@/hooks/use-ingest-status'
 import { cn } from '@/lib/utils'
 
 const NAV = [
-  { to: '/chat', label: 'Assistant', icon: MessageSquareText, title: 'Assistant' },
-  { to: '/documents', label: 'Documents', icon: FolderOpen, title: 'Documents & ingestion' },
-  { to: '/graph', label: 'Graphe', icon: Waypoints, title: 'Graphe de connaissances' },
+  { to: '/admin/chat', label: 'Assistant', icon: MessageSquareText, title: 'Assistant (vue complète)' },
+  { to: '/admin/documents', label: 'Documents', icon: FolderOpen, title: 'Documents & ingestion' },
+  { to: '/admin/graph', label: 'Graphe', icon: Waypoints, title: 'Graphe de connaissances' },
 ]
 
-const APP_TITLE = window.env?.APP_TITLE || 'EasyRAG'
-const APP_SUBTITLE = window.env?.APP_SUBTITLE || 'Knowledge Retriever'
+export const APP_TITLE = window.env?.APP_TITLE || 'EasyRAG'
+export const APP_SUBTITLE = window.env?.APP_SUBTITLE || 'Knowledge Retriever'
 
 function IngestPill() {
   const { status, isActive } = useIngestStatus()
@@ -30,7 +30,7 @@ function IngestPill() {
   const pct = status.total ? Math.round((done / status.total) * 100) : 0
   if (isActive) {
     return (
-      <Link to="/documents">
+      <Link to="/admin/documents">
         <Badge variant="outline" className="gap-1.5 font-normal text-muted-foreground hover:bg-accent">
           <Loader2 className="size-3 animate-spin text-primary" />
           Ingestion {done}/{status.total} · {pct}%
@@ -40,7 +40,7 @@ function IngestPill() {
   }
   if (status.status === 'failed' || status.failed > 0) {
     return (
-      <Link to="/documents">
+      <Link to="/admin/documents">
         <Badge variant="outline" className="gap-1.5 font-normal text-destructive hover:bg-accent">
           <CircleAlert className="size-3" /> {status.failed} échec{status.failed > 1 ? 's' : ''} d'ingestion
         </Badge>
@@ -49,7 +49,7 @@ function IngestPill() {
   }
   if (status.status === 'completed') {
     return (
-      <Link to="/documents">
+      <Link to="/admin/documents">
         <Badge variant="outline" className="gap-1.5 font-normal text-muted-foreground hover:bg-accent">
           <CircleCheck className="size-3 text-success" /> {done} document{done > 1 ? 's' : ''}
         </Badge>
@@ -59,7 +59,7 @@ function IngestPill() {
   return null
 }
 
-function ThemeToggle() {
+export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme()
   const dark = resolvedTheme === 'dark'
   return (
@@ -85,13 +85,13 @@ export default function AppShell() {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton size="lg" asChild>
-                  <Link to="/chat">
+                  <Link to="/admin/chat">
                     <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                      <Sparkles className="size-4" />
+                      <ShieldCheck className="size-4" />
                     </div>
                     <div className="grid flex-1 text-left text-sm leading-tight">
                       <span className="truncate font-semibold">{APP_TITLE}</span>
-                      <span className="truncate text-xs text-muted-foreground">{APP_SUBTITLE}</span>
+                      <span className="truncate text-xs text-muted-foreground">Administration</span>
                     </div>
                   </Link>
                 </SidebarMenuButton>
@@ -113,9 +113,13 @@ export default function AppShell() {
             </SidebarGroup>
           </SidebarContent>
           <SidebarFooter>
-            <p className="px-2 text-[11px] text-muted-foreground group-data-[collapsible=icon]:hidden">
-              Réponses générées à partir de vos documents, avec sources.
-            </p>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Vue utilisateur">
+                  <Link to="/"><ExternalLink /><span>Vue utilisateur</span></Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
           </SidebarFooter>
           <SidebarRail />
         </Sidebar>
