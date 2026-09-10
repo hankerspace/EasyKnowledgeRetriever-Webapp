@@ -215,6 +215,9 @@ def test_legal_headings_follow_chapters_articles_and_annexes():
     assert heads[1] == heads[2] == f"{crumb} > Article 6 — Règles relatives à la classification", heads
     assert heads[3] == f"{crumb} > Article 19 — Journaux générés automatiquement", heads
     assert heads[4] == heads[5] == "Annexe III — Systèmes d'IA à haut risque visés à l'article 6", heads
+    # a chunk that opens the next annex mid-way carries both
+    spanning = derive_headings(["ANNEXE II\nListe des infractions\n- terrorisme\nANNEXE III\nSystèmes d'IA à haut risque\n1. Biométrie"])
+    assert spanning == ["Annexe II — Liste des infractions ; puis Annexe III — Systèmes d'IA à haut risque"], spanning
 
 
 if __name__ == "__main__":

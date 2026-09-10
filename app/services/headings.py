@@ -61,9 +61,14 @@ def derive_headings(contents: List[str]) -> List[str]:
         opening = [e for e in events if e[0] <= lead]
         for _, kind, m in opening:
             apply(kind, m)
-        headings.append(" > ".join(x for x in (chapter, section, place) if x))
+        crumb = " > ".join(x for x in (chapter, section, place) if x)
         for _, kind, m in events[len(opening):]:
             apply(kind, m)
+        # A chunk that starts in one article/annex and opens the next one mid-way must be findable by both:
+        # "Annexe II ; puis Annexe III — Systèmes d'IA à haut risque ..."
+        if place and place not in crumb:
+            crumb = f"{crumb} ; puis {place}"
+        headings.append(crumb)
     return headings
 
 
