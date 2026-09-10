@@ -28,7 +28,7 @@ AUTH = "Basic " + base64.b64encode(f"{ENV['AUTH_USER']}:{ENV['AUTH_PASSWORD']}".
 # Juge d'une autre famille que le générateur (mistral) : limite l'auto-complaisance.
 JUDGE_MODEL = os.environ.get("EVAL_JUDGE_MODEL", "gpt-oss-120b")
 N = r"[\s  .]?"  # séparateur de milliers
-REFUSAL = r"(ne dispose pas|pas d.informations?|ne contient pas|ne précise pas|ne mentionne pas|ne fournit pas|aucune information|ne figure pas|n.est pas (mentionné|précisé|traité|abordé))"
+REFUSAL = r"(ne dispose pas|pas d.informations?|ne contien(t|nent) pas|ne précise(nt)? pas|ne mentionne(nt)? pas|ne fourni(t|ssent) pas|aucune information|ne figure(nt)? pas|n.est pas (mentionné|précisé|traité|abordé)|do(es)? not contain|no information)"
 TRAPS = {"piège-hallucination", "hors périmètre", "fausse prémisse"}
 
 # id, catégorie, question, réponse de référence, preuves (regex sur chunks, OR), faits attendus (regex sur réponse), interdits
