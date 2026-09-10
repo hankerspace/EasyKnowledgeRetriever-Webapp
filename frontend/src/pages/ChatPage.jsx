@@ -8,7 +8,7 @@ import { useIngestStatus } from '@/hooks/use-ingest-status'
 import Composer from '@/components/chat/Composer'
 import AnswerCard from '@/components/chat/AnswerCard'
 import RetrievalSettings from '@/components/chat/RetrievalSettings'
-import { loadSettings, saveSettings } from '@/lib/retrieval'
+import { loadSettings, saveSettings, DEFAULT_SETTINGS } from '@/lib/retrieval'
 
 const SUGGESTIONS = [
   'Quels sont les points clés abordés dans les documents ?',
@@ -18,11 +18,13 @@ const SUGGESTIONS = [
 
 let nextId = 1
 
-export default function ChatPage() {
+/** `admin`: full console (retrieval settings, technical details, retrieval stats). */
+export default function ChatPage({ admin = false }) {
   const [messages, setMessages] = useState([])
   const [health, setHealth] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [settings, setSettings] = useState(loadSettings)
+  // Tuning is an admin affordance: end users always query with the defaults.
+  const [settings, setSettings] = useState(() => (admin ? loadSettings() : { ...DEFAULT_SETTINGS }))
   const updateSettings = (s) => { setSettings(s); saveSettings(s) }
   const abortRef = useRef(null)
   const bottomRef = useRef(null)
@@ -125,7 +127,7 @@ export default function ChatPage() {
                 <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-sm text-primary-foreground shadow-sm">{m.content}</div>
               </div>
             ) : (
-              <AnswerCard key={m.id} msg={m} />
+              <AnswerCard key={m.id} msg={m} admin={admin} />
             ),
           )}
           <div ref={bottomRef} />
@@ -133,7 +135,7 @@ export default function ChatPage() {
       </div>
       <div className="border-t bg-background/80 backdrop-blur">
         <div className="mx-auto w-full max-w-4xl px-4 py-3 sm:px-6">
-          <Composer leading={<RetrievalSettings value={settings} onChange={updateSettings} disabled={busy} />} onSend={send} onStop={() => abortRef.current?.abort()} busy={busy} disabled={!ready} placeholder={ready ? 'Posez votre question… (Entrée pour envoyer, Maj+Entrée pour un retour à la ligne)' : 'En attente du moteur RAG…'} />
+          <Composer leading={admin ? <RetrievalSettings value={settings} onChange={updateSettings} disabled={busy} /> : null} onSend={send} onStop={() => abortRef.current?.abort()} busy={busy} disabled={!ready} placeholder={ready ? 'Posez votre question… (Entrée pour envoyer, Maj+Entrée pour un retour à la ligne)' : 'En attente du moteur RAG…'} />
           <p className="mt-1.5 text-center text-[11px] text-muted-foreground">Les réponses sont générées à partir de vos documents et citent leurs sources. Vérifiez les passages importants.</p>
         </div>
       </div>

@@ -23,7 +23,8 @@ export function splitReferences(markdown) {
 }
 
 // `[1]`, `[1, page 2]`, `[1, p. 2]`, `[1, pages 2, 5]`, `[1, 2]`, `[1, page 2; 3, page 4]`
-const CITATION = /\[(\d+(?:\s*,\s*(?:(?:pages?|p\.?)\s*)?\d+)*(?:\s*;\s*\d+(?:\s*,\s*(?:(?:pages?|p\.?)\s*)?\d+)*)*)\](?!\()/g
+const PAGE_TOKEN = String.raw`(?:(?:pages?|p\.?)\s*(?:\d+|non\s+sp[ée]cifi[ée]e|inconnue|n\/a)|\d+)`
+const CITATION = new RegExp(String.raw`\[(\d+(?:\s*,\s*${PAGE_TOKEN})*(?:\s*;\s*\d+(?:\s*,\s*${PAGE_TOKEN})*)*)\](?!\()`, 'g')
 const PAGE = /^(?:pages?|p\.?)\s*(\d+)$/i
 
 // One entry per part: {id, pages: [..]} (pages empty when none). A bare number
@@ -40,6 +41,7 @@ function parseGroup(group, knownIds) {
     for (const t of tokens.slice(1)) {
       const pm = t.match(PAGE)
       if (pm) { pageMode = true; first.pages.push(Number(pm[1])); continue }
+      if (/^(?:pages?|p\.?)\s/i.test(t)) { pageMode = true; continue } // "page non spécifiée"
       if (!/^\d+$/.test(t)) continue
       const isPage = pageMode || (knownIds && !knownIds.has(t))
       if (isPage) first.pages.push(Number(t))
