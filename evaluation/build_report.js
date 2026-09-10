@@ -12,6 +12,9 @@ const EV = process.env.EVAL_OUT_DIR || path.join(__dirname, 'out'); // summary.j
 const S = JSON.parse(fs.readFileSync(path.join(EV, 'summary.json')));
 const I = JSON.parse(fs.readFileSync(path.join(EV, 'ingestion_stats.json')));
 const A = JSON.parse(fs.readFileSync(path.join(EV, 'analysis.json')));
+const optional = f => (fs.existsSync(path.join(EV, f)) ? JSON.parse(fs.readFileSync(path.join(EV, f))) : null);
+const CMP = optional('comparison_v1_v2.json'); // même juge, questions communes à la v1
+const QE2E = optional('qwen_e2e.json');       // POC relancé avec qwen en générateur
 const OUT = process.env.EVAL_REPORT || path.join(__dirname, '..', '..', 'doc', 'Rapport_Evaluation_RAG_AI_Act.docx');
 
 const W = 9638; // A4 - 2 cm de marges
@@ -117,7 +120,7 @@ const add = (...xs) => body.push(...xs.flat());
 add(
   new Paragraph({ spacing: { before: 2400 }, children: [] }),
   new Paragraph({ children: [new TextRun({ text: "Rapport d'évaluation", size: 56, bold: true, color: ACCENT })] }),
-  new Paragraph({ spacing: { after: 240 }, children: [new TextRun({ text: 'Dedhicated RAG — performances sur le règlement européen sur l\'IA', size: 32, color: '404040' })] }),
+  new Paragraph({ spacing: { after: 240 }, children: [new TextRun({ text: A.subtitle, size: 32, color: '404040' })] }),
   new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 12, color: ACCENT, space: 4 } }, spacing: { after: 480 }, children: [] }),
   kv([
     ['Date de l\'évaluation', A.date],
@@ -125,7 +128,7 @@ add(
     ['Bibliothèque', `easy-knowledge-retriever ${I.lib_version}`],
     ['Document ingéré', `${I.file} — ${I.pages} pages, ${I.doc_words.toLocaleString('fr-FR')} mots`],
     ['Jeu de test', `${S.dataset.length} questions, ${configs.length} configurations, ${Object.values(S.configs).reduce((a, c) => a + c.n, 0)} requêtes évaluées`],
-    ['Méthode', 'Métriques déterministes (récupération, faits attendus) + juge LLM + revue manuelle'],
+    ['Méthode', A.method_line],
   ]),
   BREAK(),
   new TableOfContents('Sommaire', { hyperlink: true, headingStyleRange: '1-2' }),
@@ -145,25 +148,14 @@ const kpi = [
   ['Hit rate (requêtes non décomposées)', pct(D.hit_rate_non_decomposed), 'Réponses correctes (revue manuelle)', A.manual_score],
 ];
 add(table([3019, 1800, 3019, 1800], ['Indicateur', 'Valeur', 'Indicateur', 'Valeur'], kpi.map(r => [r[0], { t: r[1], bold: true }, r[2], { t: r[3], bold: true }]), { align: [undefined, AlignmentType.CENTER, undefined, AlignmentType.CENTER] }));
-add(CAPTION('Configuration par défaut de l\'application : mode hybrid_mix, décomposition de requête activée, top_k 10, chunk_top_k 20, reranker bge-reranker-v2-m3.'));
+add(CAPTION(A.default_config_caption));
 add(H('1.2 Points forts', 2), ...A.strengths.map(t => B(t)));
 add(H('1.3 Points faibles', 2), ...A.weaknesses.map(t => B(t)));
 add(H('1.4 Recommandations prioritaires', 2), ...A.recommendations.slice(0, 5).map(r => B(`**${r.action}** — ${r.why}`)));
 
 // 2. Système évalué
 add(BREAK(), H('2. Système évalué'), P(A.system_intro));
-add(H('2.1 Architecture et paramètres', 2), kv([
-  ['LLM (génération, extraction, juge)', 'mistral-small-4-119b via ILAAS (llm.ilaas.fr, API compatible OpenAI)'],
-  ['Embeddings', 'bge-m3, 1024 dimensions, encodage float (rag-api.ilaas.fr)'],
-  ['Reranker', 'bge-reranker-v2-m3 (rag-api.ilaas.fr/v1/rerank)'],
-  ['Stockage', 'JSON KV + NanoVectorDB (seuil cosinus 0,2) + graphe NetworkX'],
-  ['Découpage', 'Chunks de 1 200 tokens, chevauchement 100 tokens'],
-  ['Récupération (défaut)', 'hybrid_mix : graphe (entités + relations, bas et haut niveau) + vecteurs, reranking'],
-  ['Budget de contexte', 'top_k 10, chunk_top_k 20, max 6 000 tokens entités / 8 000 relations / 30 000 au total'],
-  ['Décomposition de requête', 'Activée par défaut (mots-clés haut / bas niveau extraits par le LLM)'],
-  ['Concurrence', 'EKR_MAX_ASYNC = 4, EKR_EMBEDDING_MAX_ASYNC = 4, lots d\'embeddings de 32'],
-  ['Déploiement', 'Docker (nginx + supervisord + uvicorn), authentification HTTP Basic'],
-]));
+add(H('2.1 Architecture et paramètres', 2), kv(A.architecture));
 
 // 3. Ingestion
 add(H('3. Ingestion et qualité de l\'index'), P(A.ingestion_intro));
@@ -203,14 +195,7 @@ const cats = {};
 S.dataset.forEach(d => { cats[d.category] = (cats[d.category] || 0) + 1; });
 add(table([2600, 900, 6138], ['Catégorie', 'Questions', 'Ce qui est testé'], Object.entries(cats).map(([c, n]) => [c, String(n), CAT_DESC[c] || ''])));
 add(H('4.2 Configurations comparées', 2));
-add(table([3000, 6638], ['Configuration', 'Description'], [
-  ['hybrid_mix (défaut)', 'Graphe (entités + relations) + recherche vectorielle de chunks + reranking, sans décomposition de requête. Réglage de l\'application.'],
-  ['naive', 'RAG vectoriel classique : similarité sur les chunks uniquement.'],
-  ['mix', 'Graphe + vecteurs, sans la variante « hybrid » bas/haut niveau combinée du mode par défaut.'],
-  ['hybrid', 'Graphe seul (entités locales + relations globales), chunks rattachés aux entités.'],
-  ['avec décomp.', 'hybrid_mix avec query_decomposition = true (ancien défaut).'],
-  ['2e / 3e passage', 'Même série que le défaut, rejouée deux fois : mesure la reproductibilité des réponses.'],
-]));
+add(table([3000, 6638], ['Configuration', 'Description'], A.configs_table));
 add(H('4.3 Métriques', 2));
 add(table([2600, 7038], ['Métrique', 'Définition'], [
   ['Hit rate', 'Part des questions (avec preuve) où au moins un chunk contenant le passage de référence figure dans les chunks renvoyés. Les chunks de preuve sont identifiés par expression régulière sur le texte ingéré.'],
@@ -294,6 +279,18 @@ add(bars(configs.map(c => ({ label: CFG[c], value: S.configs[c].correctness })),
 add(H('6.2 Récupération de la preuve (hit rate)', 2));
 add(bars(configs.map(c => ({ label: CFG[c], value: S.configs[c].hit_rate }))));
 add(H('6.3 Analyse', 2), ...A.modes_obs.map(t => B(t)));
+
+if (CMP) {
+  add(H('6.4 Avant / après correctifs, même juge', 2), ...(A.comparison_intro || []).map(t => P(t)));
+  add(table([4638, 1000, 1400, 1400, 1200], ['Série (questions communes à la v1)', 'n', 'Exactitude', 'Complétude', 'Affirm. fausses'],
+    Object.entries(CMP).map(([k, m]) => [k, String(m.n), num(m.correctness), num(m.completeness), pct(m.wrong_claims_rate)]), { size: 16 }));
+}
+if (QE2E) {
+  add(H('6.5 Générateur qwen de bout en bout', 2), ...(A.qwen_intro || []).map(t => P(t)));
+  add(table([2638, 1000, 1000, 1000, 1000, 1000, 1000, 1000], ['Configuration', 'Latence p50', 'Latence p95', 'Exactitude', 'Fidélité', 'Halluc.', 'Pièges', 'Hit rate'],
+    Object.entries(QE2E).map(([k, m]) => [k, sec(m.latency_p50), sec(m.latency_p95), num(m.correctness), num(m.faithfulness), pct(m.hallucination_rate), pct(m.trap_pass_rate), pct(m.hit_rate)]), { size: 16 }));
+}
+if (A.comparison_obs) add(H('6.6 Constats', 2), ...A.comparison_obs.map(t => B(t)));
 
 // 7. Latence
 add(BREAK(), H('7. Latence et reproductibilité'), ...A.latency_intro.map(t => P(t)));
