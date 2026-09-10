@@ -71,13 +71,29 @@ def test_docs_are_disabled_by_default():
         assert client.get("/openapi.json").status_code == 404
 
 
-def test_dead_streaming_endpoint_is_gone():
-    """It called rag.aquery_stream(), which does not exist in the library."""
+def test_stream_endpoint_refuses_cleanly_when_rag_is_down():
+    """/query/stream must answer with a JSON 400 before any SSE headers go out."""
     with TestClient(app) as client:
-        assert client.post("/query/stream", json={"query": "x"}).status_code == 404
-        # The endpoints that do exist still answer (400 = RAG down, not 404).
-        assert client.post("/query", json={"query": "x"}).status_code == 400
-        assert client.get("/rag/ingest/status").status_code == 200
+        r = client.post("/query/stream", json={"query": "x"})
+        assert r.status_code == 400, r.text
+        assert "not initialized" in r.json()["detail"]
+
+
+def test_documents_listing_renders_while_rag_is_down():
+    """The Documents page polls this during startup: never a 4xx."""
+    with TestClient(app) as client:
+        r = client.get("/rag/documents")
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["total"] == 0
+        assert body["documents"] == []
+        assert body["message"]
+
+
+def test_sse_event_format():
+    from app.routers.query import _sse
+
+    assert _sse("token", {"text": "a\nb"}) == 'event: token\ndata: {"text": "a\\nb"}\n\n'
 
 
 def test_query_refuses_cleanly_when_rag_is_not_initialized():
