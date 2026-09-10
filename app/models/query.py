@@ -85,7 +85,7 @@ class QueryRequest(BaseModel):
     """Request for querying the knowledge base"""
     query: str = Field(..., description="Query text")
     mode: RetrievalMode = Field(
-        default="hybrid_mix",
+        default="naive",
         description="Retrieval strategy: local (entities), global (relations), hybrid (both), "
                     "mix (graph + vectors), hybrid_mix (vectors + BM25 + graph, RRF fusion), "
                     "naive (vector search only), bypass (no retrieval, LLM only)",

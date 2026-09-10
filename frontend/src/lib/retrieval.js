@@ -12,14 +12,14 @@ export const MODES = [
 export const RESPONSE_TYPES = ['Multiple Paragraphs', 'Single Paragraph', 'Bullet Points']
 
 export const DEFAULT_SETTINGS = {
-  mode: 'hybrid_mix',
+  mode: 'naive',
   top_k: 10,
   chunk_top_k: null,
   query_decomposition: false,
   response_type: 'Multiple Paragraphs',
 }
 
-const KEY = 'ekr.retrieval.v2'
+const KEY = 'ekr.retrieval.v3'
 
 export function loadSettings() {
   try {
