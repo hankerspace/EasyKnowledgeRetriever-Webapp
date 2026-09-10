@@ -1,0 +1,7 @@
+{
+  "name": "ekr-evaluation",
+  "private": true,
+  "description": "Rapport Word de l evaluation RAG (voir eval_rag.py)",
+  "scripts": { "report": "node build_report.js" },
+  "dependencies": { "docx": "^9.5.1" }
+}

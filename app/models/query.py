@@ -99,7 +99,7 @@ class QueryRequest(BaseModel):
     top_k: int = Field(default=10, ge=1, le=200, description="Number of top results to retrieve")
     stream: bool = Field(default=False, description="Enable streaming response")
     include_references: bool = Field(default=True, description="Include references in response")
-    query_decomposition: bool = Field(default=True, description="Enable query decomposition")
+    query_decomposition: bool = Field(default=False, description="Split complex queries into sub-queries. Off by default: slower, and the library returns no chunks/references for decomposed queries")
     conversation_history: Optional[List[Dict[str, Any]]] = Field(default=None, description="Conversation history")
 
 

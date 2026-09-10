@@ -15,11 +15,11 @@ export const DEFAULT_SETTINGS = {
   mode: 'hybrid_mix',
   top_k: 10,
   chunk_top_k: null,
-  query_decomposition: true,
+  query_decomposition: false,
   response_type: 'Multiple Paragraphs',
 }
 
-const KEY = 'ekr.retrieval'
+const KEY = 'ekr.retrieval.v2'
 
 export function loadSettings() {
   try {

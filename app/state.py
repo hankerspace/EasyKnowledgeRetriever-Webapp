@@ -27,6 +27,7 @@ class RAGState:
         self._vector_config: Optional[dict] = None
         self._graph_config: Optional[dict] = None
         self._reranker_config: Optional[dict] = None
+        self._rag_params: dict = {}  # language / chunking passed to EasyKnowledgeRetriever
     
     @property
     def is_initialized(self) -> bool:
@@ -81,8 +82,17 @@ class RAGState:
         self.set_llm_config({
             "model": settings.llm_model,
             "api_key": settings.llm_api_key,
-            "base_url": settings.llm_base_url
+            "base_url": settings.llm_base_url,
+            "temperature": settings.llm_temperature,
         })
+        self._rag_params = {
+            "language": settings.language,
+            "chunk_token_size": settings.chunk_token_size,
+            "chunk_overlap_token_size": settings.chunk_overlap_token_size,
+        }
+        marker = (settings.chunk_split_marker or "").replace("\\n", "\n")
+        if marker:
+            self._rag_params["chunking_func"] = _chunking_on_marker(marker)
         self.set_embedding_config({
             "model": settings.embedding_model,
             # Same provider in the common case: fall back to the LLM key
@@ -127,7 +137,9 @@ class RAGState:
                     self._llm_service = OpenAILLMService(
                         model=self._llm_config.get("model", "gpt-4o"),
                         api_key=self._llm_config.get("api_key"),
-                        base_url=self._llm_config.get("base_url", "https://api.openai.com/v1")
+                        base_url=self._llm_config.get("base_url", "https://api.openai.com/v1"),
+                        **({"temperature": self._llm_config["temperature"]}
+                           if self._llm_config.get("temperature") is not None else {}),
                     )
                 
                 # Create embedding service
@@ -156,6 +168,7 @@ class RAGState:
                     graph_storage=self._graph_storage,
                     doc_status_storage=self._doc_status_storage,
                     reranker_service=self._reranker_service,
+                    **self._rag_params,
                 )
                 
                 await self._rag_instance.initialize_storages()
@@ -260,6 +273,17 @@ class RAGState:
             "graph_storage_type": self._graph_config.get("type", "networkx") if self._graph_config else "networkx",
             "reranker_model": self._reranker_config.get("model") if self._reranker_config else None,
         }
+
+
+def _chunking_on_marker(marker: str):
+    """The library's chunker, with a section marker forced in (ingest() does not expose one)."""
+    from easy_knowledge_retriever.operations.chunking import chunking_by_token_size
+
+    def chunk(tokenizer, content, split_by_character, split_by_character_only, overlap, size, pages=None):
+        return chunking_by_token_size(tokenizer, content, split_by_character or marker,
+                                      split_by_character_only, overlap, size, pages=pages)
+
+    return chunk
 
 
 # Global state instance

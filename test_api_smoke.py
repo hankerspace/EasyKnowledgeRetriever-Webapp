@@ -181,6 +181,23 @@ def test_already_ingested_matches_processed_docs_by_path():
     assert run(already_ingested(Rag(), "/data/new.pdf")) is False
 
 
+def test_truncated_answers_are_detected():
+    """A generation cut mid-sentence must not be served as a finished answer."""
+    from app.routers.query import _looks_truncated
+
+    assert _looks_truncated("encadrées par le règlement (UE) 2016/6")
+    assert not _looks_truncated("Je ne dispose pas d'informations suffisantes.")
+    assert not _looks_truncated("Réponse.\n\n### References\n* [1] doc.pdf (Page 3)")
+    assert not _looks_truncated("")
+
+
+def test_query_decomposition_is_off_by_default():
+    """Decomposed queries come back without chunks or references: opt-in only."""
+    from app.models.query import QueryRequest
+
+    assert QueryRequest(query="x").query_decomposition is False
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failures = 0

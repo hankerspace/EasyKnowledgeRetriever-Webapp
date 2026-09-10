@@ -64,6 +64,18 @@ class Settings(BaseSettings):
     reranker_api_key: Optional[str] = None
     reranker_base_url: Optional[str] = None
 
+    # Generation temperature. 0 = the same question gets the same answer.
+    llm_temperature: float = 0.0
+
+    # Knowledge-graph extraction language and chunking. Take effect on the next
+    # ingestion only: an existing index keeps the entities and chunks it was built with.
+    language: str = "French"
+    chunk_token_size: int = 600
+    chunk_overlap_token_size: int = 80
+    # Optional section marker: chunks never straddle it (e.g. "\nArticle " for legal texts).
+    # In a .env, write a newline as the two characters \n.
+    chunk_split_marker: Optional[str] = None
+
     # Supported files for ingestion
     allowed_extensions: str = ".pdf,.txt,.md"
 
