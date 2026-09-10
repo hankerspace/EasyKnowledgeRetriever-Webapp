@@ -132,7 +132,7 @@ def test_ingest_status_is_exposed():
         r = client.get("/rag/ingest/status")
         assert r.status_code == 200, r.text
         body = r.json()
-        for key in ("status", "total", "ingested", "failed", "errors", "skipped"):
+        for key in ("status", "total", "ingested", "existing", "failed", "errors", "skipped"):
             assert key in body, key
 
 

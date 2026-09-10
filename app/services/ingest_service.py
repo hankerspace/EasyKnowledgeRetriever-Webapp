@@ -39,6 +39,7 @@ class IngestState:
             "status": self.status,
             "total": self.total,
             "ingested": self.ingested,
+            "existing": self.existing,
             "failed": self.failed,
             "current_file": self.current_file,
             "errors": self.errors,
