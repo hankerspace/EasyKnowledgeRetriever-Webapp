@@ -293,14 +293,38 @@ add(table([W - cw * configs.length, ...Array(configs.length).fill(cw)], ['Métri
     })];
   }), { size: 16, align: [undefined, ...configs.map(() => AlignmentType.CENTER)] }));
 add(CAPTION('En gras sur fond vert : meilleure valeur parmi les configurations « à froid » (les passages répétés et les générateurs alternatifs sont exclus du classement).'));
-add(H('6.1 Exactitude par configuration', 2));
-add(bars(configs.map(c => ({ label: CFG[c], value: S.configs[c].correctness })), { max: 5, fmt: score }));
-add(H('6.2 Récupération de la preuve (hit rate)', 2));
-add(bars(configs.map(c => ({ label: CFG[c], value: S.configs[c].hit_rate }))));
-add(H('6.3 Analyse', 2), ...A.modes_obs.map(t => B(t)));
-
-let s6 = 3; // optional subsections keep consecutive numbers
+let s6 = 0; // optional subsections keep consecutive numbers
 const next6 = () => `6.${++s6}`;
+if (A.modes_table) {
+  add(H(`${next6()} Synthèse des options de récupération`, 2), ...(A.modes_table_intro || []).map(t => P(t)));
+  add(table([1900, 2300, 2300, 1438, 1700], ['Option', 'Principe', 'Qualité mesurée', 'Latence p50 / p95', 'Usage recommandé'], A.modes_table, { size: 15 }));
+}
+add(H(`${next6()} Exactitude par configuration`, 2));
+add(bars(configs.map(c => ({ label: CFG[c], value: S.configs[c].correctness })), { max: 5, fmt: score }));
+add(H(`${next6()} Récupération de la preuve (hit rate)`, 2));
+add(bars(configs.map(c => ({ label: CFG[c], value: S.configs[c].hit_rate }))));
+{
+  // Exactitude moyenne par catégorie de question et par configuration (passages répétés exclus)
+  const catOf = Object.fromEntries(S.dataset.map(d => [d.qid, d.category]));
+  const cols = configs.filter(c => !c.includes('_repet'));
+  const acc = {};
+  S.per_question_all.forEach(r => {
+    if (r.correctness == null || !cols.includes(r.config)) return;
+    const byCfg = acc[catOf[r.qid]] = acc[catOf[r.qid]] || {};
+    (byCfg[r.config] = byCfg[r.config] || []).push(r.correctness);
+  });
+  const w = Math.floor((W - 2400) / cols.length);
+  add(H(`${next6()} Exactitude par catégorie de question`, 2));
+  add(table([W - w * cols.length, ...Array(cols.length).fill(w)], ['Catégorie', ...cols.map(c => CFG_SHORT[c])],
+    Object.keys(cats).map(k => [k, ...cols.map(c => {
+      const v = (acc[k] || {})[c];
+      if (!v) return '—';
+      const m = v.reduce((a, b) => a + b, 0) / v.length;
+      return { t: num(m), fill: tone(m, 4.5, 3.5) };
+    })]), { size: 15, align: [undefined, ...cols.map(() => AlignmentType.CENTER)] }));
+  add(CAPTION('Note moyenne d\'exactitude du juge (0-5) par catégorie de question. Vert : 4,5 ou plus ; rouge : 3,5 ou moins.'));
+}
+add(H(`${next6()} Analyse`, 2), ...A.modes_obs.map(t => B(t)));
 if (CMP) {
   add(H(`${next6()} ${A.comparison_title || 'Avant / après correctifs, même juge'}`, 2), ...(A.comparison_intro || []).map(t => P(t)));
   add(table([4638, 1000, 1400, 1400, 1200], ['Série (questions communes à la v1)', 'n', 'Exactitude', 'Complétude', 'Affirm. fausses'],
