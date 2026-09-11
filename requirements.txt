@@ -4,9 +4,9 @@
 # ingest .txt / .md -- it saves several GB in the image. It also needs system
 # libraries for OpenCV; the Dockerfile installs them (see README troubleshooting).
 #
-# 1.3.0 is required: first release where the embedding encoding format is
-# configurable, which OpenAI-compatible gateways need.
-easy-knowledge-retriever[pdf]>=1.3.1,<2.0
+# 1.4.0 is required: working reranker, chunk headings, hybrid_mix rerank pool
+# and grounded answer prompts the app relies on.
+easy-knowledge-retriever[pdf]>=1.4.0,<2.0
 
 fastapi>=0.109.0,<1.0
 uvicorn[standard]>=0.27.0,<1.0
