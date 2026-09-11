@@ -14,7 +14,7 @@ const I = JSON.parse(fs.readFileSync(path.join(EV, 'ingestion_stats.json')));
 const A = JSON.parse(fs.readFileSync(path.join(EV, 'analysis.json')));
 const optional = f => (fs.existsSync(path.join(EV, f)) ? JSON.parse(fs.readFileSync(path.join(EV, f))) : null);
 const CMP = optional('comparison_v1_v2.json'); // même juge, questions communes à la v1
-const QE2E = optional('qwen_e2e.json');       // POC relancé avec qwen en générateur
+const QE2E = optional('qwen_e2e.json');       // séries comparées de bout en bout (v2 : POC relancé avec qwen ; v3 : évolution v2 → v3)
 const OUT = process.env.EVAL_REPORT || path.join(__dirname, '..', '..', 'doc', 'Rapport_Evaluation_RAG_AI_Act.docx');
 
 const W = 9638; // A4 - 2 cm de marges
@@ -35,14 +35,16 @@ const CFG = {
   hybrid_mix: 'hybrid_mix (défaut)', naive: 'naive', mix: 'mix', hybrid: 'hybrid',
   hybrid_mix_decomp: 'hybrid_mix avec décomposition', hybrid_mix_repet2: 'hybrid_mix, 2e passage', hybrid_mix_repet3: 'hybrid_mix, 3e passage',
   hybrid_mix_qwen_3_6_35b_instruct: 'hybrid_mix, générateur qwen-3.6-35b',
+  hybrid_mix_mistral_small_4_119b: 'hybrid_mix, générateur mistral-small-4-119b',
 };
 const CFG_SHORT = {
   hybrid_mix: 'hybrid_mix (défaut)', naive: 'naive', mix: 'mix', hybrid: 'hybrid',
   hybrid_mix_decomp: 'avec décomp.', hybrid_mix_repet2: '2e passage', hybrid_mix_repet3: '3e passage',
   hybrid_mix_qwen_3_6_35b_instruct: 'générateur qwen',
+  hybrid_mix_mistral_small_4_119b: 'générateur mistral',
 };
-// exclus du classement : passages répétés (variance) et générateur alternatif (latence = génération seule)
-const isRepeat = c => c.includes('_repet') || c.includes('qwen');
+// exclus du classement : passages répétés (variance) et générateurs alternatifs (latence = génération seule)
+const isRepeat = c => c.includes('_repet') || (c.startsWith('hybrid_mix_') && c !== 'hybrid_mix_decomp');
 const configs = Object.keys(CFG).filter(k => S.configs[k]);
 const D = S.configs.hybrid_mix;
 
@@ -84,6 +86,13 @@ function table(widths, header, rows, o = {}) {
     }),
   }));
   return new Table({ width: { size: widths.reduce((a, b) => a + b, 0), type: WidthType.DXA }, columnWidths: widths, rows: [head, ...body] });
+}
+
+// Tableau à largeur de colonnes égales après une première colonne de libellés (`{header, rows}` d'analysis.json)
+function grid({ header, rows }, first = 2600, size = 16) {
+  const w = Math.floor((W - first) / (header.length - 1));
+  return table([W - w * (header.length - 1), ...Array(header.length - 1).fill(w)], header, rows,
+    { size, align: [undefined, ...header.slice(1).map(() => AlignmentType.CENTER)] });
 }
 
 // Barres horizontales natives : 20 cellules ombrées
@@ -156,6 +165,16 @@ add(H('1.4 Recommandations prioritaires', 2), ...A.recommendations.slice(0, 5).m
 // 2. Système évalué
 add(BREAK(), H('2. Système évalué'), P(A.system_intro));
 add(H('2.1 Architecture et paramètres', 2), kv(A.architecture));
+if (A.changes) {
+  add(H('2.2 Évolutions depuis l\'évaluation précédente', 2), ...(A.changes_intro || []).map(t => P(t)));
+  add(table([1500, 4938, 3200], ['Lot', 'Changement', 'Effet mesuré'], A.changes, { size: 16 }));
+  if (A.improvement_table) {
+    add(CAPTION(A.improvement_table.caption_before || ''));
+    add(grid(A.improvement_table));
+    if (A.improvement_table.caption) add(CAPTION(A.improvement_table.caption));
+  }
+  if (A.changes_obs) add(...A.changes_obs.map(t => B(t)));
+}
 
 // 3. Ingestion
 add(H('3. Ingestion et qualité de l\'index'), P(A.ingestion_intro));
@@ -273,24 +292,26 @@ add(table([W - cw * configs.length, ...Array(configs.length).fill(cw)], ['Métri
       return { t: f(v), bold: win, fill: win ? GOOD : undefined };
     })];
   }), { size: 16, align: [undefined, ...configs.map(() => AlignmentType.CENTER)] }));
-add(CAPTION('En gras sur fond vert : meilleure valeur parmi les configurations « à froid » (les passages répétés sont exclus du classement).'));
+add(CAPTION('En gras sur fond vert : meilleure valeur parmi les configurations « à froid » (les passages répétés et les générateurs alternatifs sont exclus du classement).'));
 add(H('6.1 Exactitude par configuration', 2));
 add(bars(configs.map(c => ({ label: CFG[c], value: S.configs[c].correctness })), { max: 5, fmt: score }));
 add(H('6.2 Récupération de la preuve (hit rate)', 2));
 add(bars(configs.map(c => ({ label: CFG[c], value: S.configs[c].hit_rate }))));
 add(H('6.3 Analyse', 2), ...A.modes_obs.map(t => B(t)));
 
+let s6 = 3; // optional subsections keep consecutive numbers
+const next6 = () => `6.${++s6}`;
 if (CMP) {
-  add(H('6.4 Avant / après correctifs, même juge', 2), ...(A.comparison_intro || []).map(t => P(t)));
+  add(H(`${next6()} ${A.comparison_title || 'Avant / après correctifs, même juge'}`, 2), ...(A.comparison_intro || []).map(t => P(t)));
   add(table([4638, 1000, 1400, 1400, 1200], ['Série (questions communes à la v1)', 'n', 'Exactitude', 'Complétude', 'Affirm. fausses'],
     Object.entries(CMP).map(([k, m]) => [k, String(m.n), num(m.correctness), num(m.completeness), pct(m.wrong_claims_rate)]), { size: 16 }));
 }
 if (QE2E) {
-  add(H('6.5 Générateur qwen de bout en bout', 2), ...(A.qwen_intro || []).map(t => P(t)));
-  add(table([2638, 1000, 1000, 1000, 1000, 1000, 1000, 1000], ['Configuration', 'Latence p50', 'Latence p95', 'Exactitude', 'Fidélité', 'Halluc.', 'Pièges', 'Hit rate'],
-    Object.entries(QE2E).map(([k, m]) => [k, sec(m.latency_p50), sec(m.latency_p95), num(m.correctness), num(m.faithfulness), pct(m.hallucination_rate), pct(m.trap_pass_rate), pct(m.hit_rate)]), { size: 16 }));
+  add(H(`${next6()} ${A.qwen_title || 'Générateur qwen de bout en bout'}`, 2), ...(A.qwen_intro || []).map(t => P(t)));
+  add(table([2638, 875, 875, 875, 875, 875, 875, 875, 875], ['Série', 'Latence p50', 'Latence p95', 'Exactitude', 'Fidélité', 'Halluc.', 'Pièges', 'Hit@5', 'Pages justes'],
+    Object.entries(QE2E).map(([k, m]) => [k, sec(m.latency_p50), sec(m.latency_p95), num(m.correctness), num(m.faithfulness), pct(m.hallucination_rate), pct(m.trap_pass_rate), pct(m.hit_at_5), pct(m.citation_page_ok)]), { size: 15 }));
 }
-if (A.comparison_obs) add(H('6.6 Constats', 2), ...A.comparison_obs.map(t => B(t)));
+if (A.comparison_obs) add(H(`${next6()} Constats`, 2), ...A.comparison_obs.map(t => B(t)));
 
 // 7. Latence
 add(BREAK(), H('7. Latence et reproductibilité'), ...A.latency_intro.map(t => P(t)));
@@ -347,9 +368,10 @@ add(table([W - cw * configs.length, ...Array(configs.length).fill(cw)], ['Q', ..
   })]), { size: 16, align: [undefined, ...configs.map(() => AlignmentType.CENTER)] }));
 add(BREAK(), H('Annexe C. Reproduire l\'évaluation'));
 add(P('Prérequis : conteneur easy_knowledge_retriever démarré sur le port 85 avec l\'index du règlement IA, fichier dedhicated-app/.env renseigné, paquet npm docx accessible. Depuis la racine du projet :'));
-['cd webapp/evaluation && npm install', 'python eval_rag.py check', 'python eval_rag.py stats', 'python eval_rag.py run', 'python eval_rag.py report', 'node build_report.js']
+['cd webapp/evaluation && npm install', 'python eval_rag.py check', 'python eval_rag.py stats', 'python eval_rag.py run',
+  'EVAL_ALT_MODEL=<autre LLM> python eval_rag.py altgen   # rejoue les prompts du défaut avec un autre générateur', 'python eval_rag.py report', 'node build_report.js']
   .forEach(c => add(CODE(c)));
-add(P('Fichiers produits : out/results.jsonl (une ligne par requête : réponse complète, rangs, faits manquants, verdict du juge), out/summary.json (agrégats), out/ingestion_stats.json (statistiques d\'index), out/analysis.json (analyse rédigée). La commande run reprend là où elle s\'est arrêtée ; supprimer results.jsonl pour repartir à froid.'));
+add(P('Fichiers produits : out/results.jsonl (une ligne par requête : réponse complète, rangs, faits manquants, verdict du juge), out/summary.json (agrégats), out/ingestion_stats.json (statistiques d\'index), out/analysis.json (analyse rédigée). La commande run reprend là où elle s\'est arrêtée ; supprimer results.jsonl pour repartir à froid. EVAL_OUT_DIR et EVAL_REPORT changent les dossiers d\'entrée et le fichier produit.'));
 add(P(`Données générées le ${S.generated_at}.`, { italics: true, color: '7F7F7F', size: 17 }));
 
 // --- document -------------------------------------------------------------------
