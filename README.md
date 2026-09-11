@@ -1,34 +1,74 @@
 # EasyKnowledgeRetriever WebApp
 
-Web application (Backend + Frontend) providing a graphical interface for the
+Web application (backend + frontend) for the
 [EasyKnowledgeRetriever](https://github.com/hankerspace/EasyKnowledgeRetriever)
-library: configure a RAG pipeline, ingest documents, explore the knowledge base
-(graph and vectors) and query it through a chat interface.
+library: ingest documents, explore the knowledge base (graph and vectors) and
+ask questions through a chat that cites the document and page behind every
+passage. The interface is available in **English** (default) and **French**.
+
+![Answer with page-level citations](docs/screenshots/chat-answer-en.png)
+
+## Contents
+
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [Architecture](#architecture)
+- [Quick start (Docker)](#quick-start-docker-recommended)
+- [Local development](#local-development)
+- [Languages](#languages)
+- [Configuration](#configuration)
+- [Deployment notes](#deployment-notes)
+- [Troubleshooting](#troubleshooting)
+- [Endpoints](#endpoints)
+- [License](#license)
+
+## Features
+
+- **Streaming answers with citations.** Each paragraph shows the document and
+  page it relies on; clicking a citation opens the verbatim retrieved excerpt.
+- **Two surfaces on one bundle.** `/` is the end-user chat; `/admin` adds the
+  retrieval settings, technical details (prompts, metadata), document ingestion
+  and the knowledge-graph explorer.
+- **Every retrieval strategy of the library**: `hybrid_mix` (vectors + BM25 +
+  graph, the default), `mix`, `hybrid`, `local`, `global`, `naive`, `bypass`.
+- **Live ingestion status** with per-file errors, and a document table.
+- **English / French interface**, light and dark themes, remembered per browser.
+- **Single container**: nginx (basic auth, static frontend) and uvicorn under
+  supervisord.
+
+## Screenshots
+
+| | |
+|---|---|
+| ![End-user chat](docs/screenshots/chat-empty-en.png) **End-user chat** (English) | ![Source excerpt](docs/screenshots/source-sheet-en.png) **Verbatim of a cited passage** |
+| ![Admin assistant in French](docs/screenshots/chat-admin-fr.png) **Admin assistant** (French) | ![Retrieval settings](docs/screenshots/settings-fr.png) **Retrieval settings** (French) |
+| ![Documents and ingestion](docs/screenshots/documents-fr.png) **Documents & ingestion** (French) | ![Knowledge graph](docs/screenshots/graph-en.png) **Knowledge graph explorer** |
+
+Screenshots taken on the EU AI Act (one 400-page PDF, 322 chunks, 2,535
+entities) with `hybrid_mix` and `qwen-3.6-35b-instruct`.
 
 ## Architecture
 
 - **Backend (`app/`)** — FastAPI REST API. Orchestrates the RAG, exposes query
   and database endpoints. Bound to `127.0.0.1:8000`; never exposed directly.
-- **Frontend (`frontend/`)** — React + Vite + TailwindCSS.
+- **Frontend (`frontend/`)** — React + Vite + TailwindCSS on
+  [shadcn/ui](https://ui.shadcn.com). UI strings live in
+  `frontend/src/lib/messages.js`.
 - **Docker image** — a single container running nginx (TLS-less reverse proxy,
   basic auth, static frontend) and uvicorn under supervisord.
 
 Configuration is **environment-only**. There is no configuration API.
 
-## API surface used by the UI
+### API surface used by the UI
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /query` | One-shot JSON answer, with the chunks and references the answer cites. |
-| `POST /query/stream` | Same request, answered as Server-Sent Events: `status` (`retrieving` → `generating`), `context` (chunks, references, entity/relation counts), `token`, `done`, `error`. |
+| `POST /query/stream` | Answer as Server-Sent Events: `status` (`retrieving` → `generating`), `context` (chunks, references, entity/relation counts), `token`, `done`, `error`. |
+| `POST /query` | Same request, one-shot JSON answer with the chunks and references it cites. |
 | `GET /rag/ingest/status` | Progress of the ingestion pass (files seen / ingested / failed, current file, errors). |
 | `GET /rag/documents` | Documents in the library's status store (status, chunk count, size, timestamps, error). |
 | `POST /rag/ingest` | Re-scan the source directory in the background (409 while a pass is running). |
-
-The frontend (`frontend/`) is built on [shadcn/ui](https://ui.shadcn.com): the
-Assistant page streams answers and shows, next to each passage, the document
-and page that support it; clicking a citation opens the verbatim of the
-retrieved chunk(s). The Documents page follows ingestion live.
+| `GET /db/graph/nodes`, `/db/graph/edges` | Graph explorer (capped at 500 nodes / 1,000 edges, with the real totals). |
 
 ## Quick start (Docker, recommended)
 
@@ -43,8 +83,9 @@ cp /path/to/your.pdf documents/
 docker compose up -d --build
 ```
 
-The UI is on <http://127.0.0.1:85>. The API answers immediately; ingestion runs
-in the **background** and can take hours on a large corpus.
+The UI is on <http://127.0.0.1:85> (end-user chat on `/`, console on `/admin`).
+The API answers immediately; ingestion runs in the **background** and can take
+hours on a large corpus.
 
 ```bash
 curl -s localhost:85/health              # liveness, no auth needed
@@ -56,11 +97,12 @@ curl -s localhost:85/health/ready        # 503 until RAG is up AND ingest done
 
 `requirements.txt` requires **>= 1.3.0**: that is the first release where the
 embedding encoding format is configurable, which OpenAI-compatible gateways
-need. To build against the library repository instead of PyPI:
+need. To build against the library repository instead of PyPI, pin a commit
+(see [Troubleshooting](#--build-arg-ekr_packagemain-installs-a-stale-commit)):
 
 ```bash
 docker compose build --build-arg \
-  EKR_PACKAGE="easy-knowledge-retriever[pdf] @ git+https://github.com/hankerspace/EasyKnowledgeRetriever@main"
+  EKR_PACKAGE="easy-knowledge-retriever[pdf] @ git+https://github.com/hankerspace/EasyKnowledgeRetriever@<commit-sha>"
 ```
 
 ### Image size
@@ -99,12 +141,39 @@ uvicorn app.main:app --reload --port 8000
 ```bash
 cd frontend && npm install && npm run dev
 ```
-Vite proxies `/rag`, `/query`, `/db` and `/health` to `localhost:8000`.
+Vite proxies `/rag`, `/query`, `/db` and `/health` to `localhost:8000`. To work
+on the UI against a running container instead of a local backend:
+
+```bash
+VITE_API_TARGET=http://localhost:85 VITE_API_AUTH=user:password npm run dev
+```
 
 **Tests** (no LLM key, no network required):
 ```bash
-python test_api_smoke.py
+python test_api_smoke.py          # API
+cd frontend && npm test           # citation parsing, translations
 ```
+
+CI (`.github/workflows/ci.yml`) runs both, builds the frontend, builds the
+Docker image and checks its PDF toolchain and health endpoint.
+
+## Languages
+
+The interface is in **English by default** and can be switched to **French**
+with the `EN` / `FR` button in the header. The choice is remembered in the
+browser. Order of precedence:
+
+1. `?lang=fr` or `?lang=en` in the URL (handy for sharing a link);
+2. the language the user picked;
+3. `APP_LANGUAGE` from the deployment (`en` or `fr`);
+4. English.
+
+Answers follow the language of the **question**, not the interface: the answer
+prompt tells the model to reply in the language it is asked in.
+
+To add a language: add it to `LANGUAGES` and `MESSAGES` in
+`frontend/src/lib/messages.js`. `npm test` fails if any key is missing in one
+language or if the code uses a key that does not exist.
 
 ## Configuration
 
@@ -124,12 +193,17 @@ matter most:
 | `EKR_RERANKER_MODEL` / `_BASE_URL` | *(none)* | Optional cross-encoder rerank. The base URL is the **full** endpoint, `/rerank` included. |
 | `EKR_INGEST_START_PAGE` / `_END_PAGE` | *(none)* | Ingest a page slice, to measure cost before a long document. |
 | `AUTH_USER` / `AUTH_PASSWORD` | *(none)* | Both must be set, or **the app is served with no authentication**. |
+| `APP_TITLE` / `APP_SUBTITLE` | `EasyRAG` / `Knowledge Retriever` | Shown in the header. |
+| `APP_LANGUAGE` | `en` | Interface language until the user picks one (`en` or `fr`). |
 
 ## Deployment notes
 
 - **TLS is not handled here.** The compose file publishes on `127.0.0.1` only.
   Put a TLS-terminating proxy (Caddy, Traefik, nginx) in front before exposing
   it: basic auth over plain HTTP sends the password in clear.
+- **`/admin` is a UI split, not an access boundary.** nginx basic auth and the
+  API are shared; restrict `/admin`, `/rag` and `/db` in nginx if end users must
+  not reach the console.
 - **Back up `rag_data/`.** Rebuilding it costs hours of LLM calls and real money.
 - The `ekr_models` volume holds the MinerU model cache; do not prune it casually.
 
@@ -237,8 +311,10 @@ LLM call per chunk. Two levers:
 | `GET` | `/health/ready` | Readiness. 503 until RAG is initialized and ingestion has finished. |
 | `GET` | `/rag/status` | Current RAG configuration. |
 | `GET` | `/rag/ingest/status` | Files seen / ingested / failed, with per-file errors. |
+| `GET` | `/rag/documents` | Documents known to the library, with status and chunk count. |
 | `POST` | `/rag/ingest` | Re-scan the source directory (returns immediately). |
 | `POST` | `/query` | Ask a question. |
+| `POST` | `/query/stream` | Ask a question, answer streamed as Server-Sent Events. |
 | `POST` | `/query/context` | Retrieved context only, no generation. |
 | `GET` | `/db/graph/nodes`, `/db/graph/edges` | Paginated graph access. |
 

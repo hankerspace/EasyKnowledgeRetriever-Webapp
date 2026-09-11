@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { useTheme } from 'next-themes';
 import api from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -20,6 +21,7 @@ const NODE_LIMIT = 500;
 const EDGE_LIMIT = 1000;
 
 const GraphPage = () => {
+  const { t } = useI18n();
   const [data, setData] = useState({ nodes: [], links: [] });
   const [loading, setLoading] = useState(false);
   const [truncated, setTruncated] = useState(null);
@@ -58,7 +60,7 @@ const GraphPage = () => {
 
       // Collect all unique node IDs from nodes and edges to ensure we display everything
       const nodeMap = new Map();
-      
+
       // Add existing nodes from API
       rawNodes.forEach(n => {
         const id = n.id || n;
@@ -83,15 +85,13 @@ const GraphPage = () => {
       setTruncated(isPartial ? { totalNodes, totalEdges } : null);
 
       if (isPartial) {
-        toast.warning(
-          `Vue partielle : ${nodes.length}/${totalNodes} nœuds, ${links.length}/${totalEdges} liens`
-        );
+        toast.warning(t('graph.partialToast', { nodes: nodes.length, totalNodes, links: links.length, totalEdges }));
       } else {
-        toast.success(`Graphe chargé: ${nodes.length} nœuds, ${links.length} liens`);
+        toast.success(t('graph.loaded', { nodes: nodes.length, links: links.length }));
       }
     } catch (error) {
       console.error(error);
-      toast.error("Erreur lors du chargement du graphe");
+      toast.error(t('graph.loadError'));
     } finally {
       setLoading(false);
     }
@@ -148,7 +148,7 @@ const GraphPage = () => {
 
       // Explicitly add ID/Source/Target at the top
       if (data.id) items.push({ key: 'ID', value: data.id });
-      
+
       // Handle Source/Target for links
       if (data.source) {
           const val = typeof data.source === 'object' ? data.source.id : data.source;
@@ -166,7 +166,7 @@ const GraphPage = () => {
       // Process other properties
       Object.entries(data).forEach(([key, value]) => {
         if (ignoredKeys.includes(key) || key === 'label' || key === 'weight') return;
-        
+
         if (key === 'properties' && typeof value === 'object' && value !== null) {
            // Expand nested properties object
            Object.entries(value).forEach(([pKey, pValue]) => {
@@ -191,15 +191,15 @@ const GraphPage = () => {
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4 sm:p-6">
        <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-           <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight"><Waypoints className="size-5 text-muted-foreground" /> Graphe de connaissances</h2>
-           <p className="text-sm text-muted-foreground">Entités et relations extraites des documents. Cliquez sur un élément pour voir ses propriétés.</p>
+           <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight"><Waypoints className="size-5 text-muted-foreground" /> {t('graph.title')}</h2>
+           <p className="text-sm text-muted-foreground">{t('graph.hint')}</p>
         </div>
         <div className="flex gap-2">
-           <Button variant="outline" size="icon" onClick={handleZoomOut}><ZoomOut className="w-4 h-4" /></Button>
-           <Button variant="outline" size="icon" onClick={handleZoomIn}><ZoomIn className="w-4 h-4" /></Button>
+           <Button variant="outline" size="icon" onClick={handleZoomOut} aria-label={t('graph.zoomOut')}><ZoomOut className="w-4 h-4" /></Button>
+           <Button variant="outline" size="icon" onClick={handleZoomIn} aria-label={t('graph.zoomIn')}><ZoomIn className="w-4 h-4" /></Button>
            <Button onClick={fetchData} disabled={loading}>
              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-             Rafraîchir
+             {t('common.refresh')}
            </Button>
         </div>
       </div>
@@ -208,8 +208,7 @@ const GraphPage = () => {
         <div className="relative flex-1 overflow-hidden rounded-xl border bg-card" ref={containerRef}>
           {truncated && (
             <div className="absolute left-2 top-2 z-10 rounded-md border border-warning/40 bg-warning/10 px-3 py-1.5 text-xs text-foreground shadow-sm">
-              Vue partielle — {data.nodes.length} nœuds affichés sur {truncated.totalNodes},{' '}
-              {data.links.length} liens sur {truncated.totalEdges}
+              {t('graph.partialBanner', { nodes: data.nodes.length, totalNodes: truncated.totalNodes, links: data.links.length, totalEdges: truncated.totalEdges })}
             </div>
           )}
           {data.nodes.length > 0 ? (
@@ -230,6 +229,8 @@ const GraphPage = () => {
               onLinkClick={handleLinkClick}
               nodeCanvasObjectMode={() => 'after'}
               nodeCanvasObject={(node, ctx, globalScale) => {
+                // Hundreds of overlapping labels are unreadable: name nodes once zoomed in (hovering shows the name anyway).
+                if (globalScale < 2) return;
                 const label = node.id;
                 const fontSize = 12/globalScale;
                 ctx.font = `${fontSize}px Sans-Serif`;
@@ -241,7 +242,7 @@ const GraphPage = () => {
             />
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              {loading ? 'Chargement...' : 'Aucune donnée de graphe disponible.'}
+              {loading ? t('common.loading') : t('graph.empty')}
             </div>
           )}
         </div>
@@ -251,9 +252,9 @@ const GraphPage = () => {
           <Card className="flex h-full w-80 flex-col shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 border-b p-4">
               <CardTitle className="text-base font-medium">
-                {selectedElement.type === 'node' ? 'Détails du Nœud' : 'Détails de la Relation'}
+                {selectedElement.type === 'node' ? t('graph.nodeDetails') : t('graph.linkDetails')}
               </CardTitle>
-              <Button variant="ghost" size="icon" onClick={closePropertyWindow} className="h-6 w-6">
+              <Button variant="ghost" size="icon" onClick={closePropertyWindow} className="h-6 w-6" aria-label={t('common.close')}>
                 <X className="h-4 w-4" />
               </Button>
             </CardHeader>

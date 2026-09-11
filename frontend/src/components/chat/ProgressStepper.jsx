@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Check, Loader2, Search, PenLine, CircleAlert } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { modeLabel } from '@/lib/retrieval'
+import { useI18n } from '@/lib/i18n'
 
 function useElapsed(startedAt, endedAt) {
   const [now, setNow] = useState(Date.now())
@@ -38,6 +38,7 @@ function Step({ icon: Icon, state, title, detail }) {
 
 /** Live view of a streamed answer: retrieval, then generation. */
 export default function ProgressStepper({ msg, admin = false }) {
+  const { t } = useI18n()
   const elapsed = useElapsed(msg.startedAt, msg.endedAt)
   const ctx = msg.context
   const finished = msg.status !== 'streaming'
@@ -45,25 +46,29 @@ export default function ProgressStepper({ msg, admin = false }) {
   const genState = !ctx ? 'pending' : msg.status === 'error' ? 'error' : finished ? 'done' : 'active'
 
   const n = ctx ? ctx.chunks.length : 0
-  const modeTag = admin && msg.settings ? `${modeLabel(msg.settings.mode)} · top k ${msg.settings.top_k}` : null
+  const seconds = (msg.total_seconds ?? elapsed).toFixed(1)
+  const modeTag = admin && msg.settings ? `${t(`mode.${msg.settings.mode}`)} · top k ${msg.settings.top_k}` : null
+  const excerpts = t('answer.excerpts', { count: n })
+  const entities = ctx ? t('progress.entities', { count: ctx.entities ?? 0 }) : ''
+  const relations = ctx ? t('progress.relations', { count: ctx.relationships ?? 0 }) : ''
   const retrievalDetail = !admin
-    ? (ctx ? `${n} passage${n > 1 ? 's' : ''} pertinent${n > 1 ? 's' : ''} trouvé${n > 1 ? 's' : ''}` : 'Recherche des passages pertinents dans vos documents…')
+    ? (ctx ? t('progress.passagesFound', { count: n }) : t('progress.searching'))
     : ctx
-      ? `${ctx.entities} entité${ctx.entities > 1 ? 's' : ''} · ${ctx.relationships} relation${ctx.relationships > 1 ? 's' : ''} · ${n} extrait${n > 1 ? 's' : ''}${ctx.retrieval_seconds != null ? ` · ${ctx.retrieval_seconds}s` : ''}`
-      : `Analyse de la question, recherche dans la base${modeTag ? ` (${modeTag})` : ''}…`
+      ? `${entities} · ${relations} · ${excerpts}${ctx.retrieval_seconds != null ? ` · ${ctx.retrieval_seconds}s` : ''}`
+      : t('progress.analysing', { mode: modeTag ? ` (${modeTag})` : '' })
   const genDetail = !admin
-    ? (ctx ? 'Rédaction de la réponse…' : null)
+    ? (ctx ? t('progress.writing') : null)
     : ctx
-      ? `${msg.tokens} fragment${msg.tokens > 1 ? 's' : ''} reçu${msg.tokens > 1 ? 's' : ''} · ${(msg.total_seconds ?? elapsed).toFixed(1)}s`
+      ? `${t('progress.fragments', { count: msg.tokens })} · ${seconds}s`
       : null
 
   if (finished && msg.status === 'done') {
     return (
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1"><Check className="size-3 text-success" /> Réponse générée en {(msg.total_seconds ?? elapsed).toFixed(1)}s</span>
+        <span className="inline-flex items-center gap-1"><Check className="size-3 text-success" /> {t('progress.generatedIn', { seconds })}</span>
         {ctx && (admin
-          ? <span>{n} extrait{n > 1 ? 's' : ''} · {ctx.entities} entité{ctx.entities > 1 ? 's' : ''} · {ctx.relationships} relation{ctx.relationships > 1 ? 's' : ''}</span>
-          : <span>{n} passage{n > 1 ? 's' : ''} consulté{n > 1 ? 's' : ''}</span>)}
+          ? <span>{excerpts} · {entities} · {relations}</span>
+          : <span>{t('progress.passagesRead', { count: n })}</span>)}
         {modeTag && <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">{modeTag}</span>}
       </div>
     )
@@ -71,8 +76,8 @@ export default function ProgressStepper({ msg, admin = false }) {
 
   return (
     <div className="grid gap-3 rounded-lg border border-dashed bg-muted/40 p-3 sm:grid-cols-2">
-      <Step icon={Search} state={retrievalState} title="Recherche dans la base" detail={retrievalDetail} />
-      <Step icon={PenLine} state={genState} title="Génération de la réponse" detail={genDetail} />
+      <Step icon={Search} state={retrievalState} title={t('progress.retrieval')} detail={retrievalDetail} />
+      <Step icon={PenLine} state={genState} title={t('progress.generation')} detail={genDetail} />
     </div>
   )
 }

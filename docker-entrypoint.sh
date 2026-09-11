@@ -12,7 +12,8 @@ esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 cat <<EOJS > /app/static/config.js
 window.env = {
   APP_TITLE: "$(esc "${APP_TITLE:-EasyRAG}")",
-  APP_SUBTITLE: "$(esc "${APP_SUBTITLE:-Knowledge Retriever}")"
+  APP_SUBTITLE: "$(esc "${APP_SUBTITLE:-Knowledge Retriever}")",
+  APP_LANGUAGE: "$(esc "${APP_LANGUAGE:-en}")"
 };
 EOJS
 

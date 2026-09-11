@@ -3,7 +3,7 @@ import { Outlet } from 'react-router-dom'
 import { Sparkles } from 'lucide-react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/ui/sonner'
-import { ThemeToggle, APP_TITLE, APP_SUBTITLE } from '@/components/AppShell'
+import { ThemeToggle, LanguageToggle, APP_TITLE, APP_SUBTITLE } from '@/components/AppShell'
 
 /** End-user surface: the chat alone, no console chrome. */
 export default function UserShell() {
@@ -18,7 +18,10 @@ export default function UserShell() {
             <span className="text-sm font-semibold">{APP_TITLE}</span>
             <span className="text-xs text-muted-foreground">{APP_SUBTITLE}</span>
           </div>
-          <div className="ml-auto"><ThemeToggle /></div>
+          <div className="ml-auto flex items-center gap-1">
+            <LanguageToggle />
+            <ThemeToggle />
+          </div>
         </header>
         <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <Outlet />
