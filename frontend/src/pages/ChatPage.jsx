@@ -5,21 +5,17 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { getHealth, streamQuery } from '@/lib/api'
 import { useIngestStatus } from '@/hooks/use-ingest-status'
+import { useI18n } from '@/lib/i18n'
 import Composer from '@/components/chat/Composer'
 import AnswerCard from '@/components/chat/AnswerCard'
 import RetrievalSettings from '@/components/chat/RetrievalSettings'
 import { loadSettings, saveSettings, DEFAULT_SETTINGS } from '@/lib/retrieval'
 
-const SUGGESTIONS = [
-  'Quels sont les points clés abordés dans les documents ?',
-  'Résume les obligations principales décrites dans la base.',
-  'Quelles définitions importantes sont données ?',
-]
-
 let nextId = 1
 
 /** `admin`: full console (retrieval settings, technical details, retrieval stats). */
 export default function ChatPage({ admin = false }) {
+  const { t } = useI18n()
   const [messages, setMessages] = useState([])
   const [health, setHealth] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -33,7 +29,7 @@ export default function ChatPage({ admin = false }) {
   useEffect(() => {
     let timer
     const check = async () => {
-      try { setHealth(await getHealth()) } catch { setHealth({ rag_initialized: false, startup_error: 'API injoignable' }) }
+      try { setHealth(await getHealth()) } catch { setHealth({ rag_initialized: false, startup_error: t('chat.apiUnreachable') }) }
       timer = setTimeout(check, health?.rag_initialized ? 60000 : 5000)
     }
     check()
@@ -67,9 +63,9 @@ export default function ChatPage({ admin = false }) {
           content: d.content, status: 'done', endedAt: Date.now(), total_seconds: d.total_seconds,
           details: { system_prompt: d.system_prompt, user_prompt: d.user_prompt, metadata: d.metadata },
         })),
-        error: (d) => { patch(id, () => ({ status: 'error', error: d.message, endedAt: Date.now() })); toast.error('La requête a échoué') },
+        error: (d) => { patch(id, () => ({ status: 'error', error: d.message, endedAt: Date.now() })); toast.error(t('chat.queryFailed')) },
       }, ctrl.signal)
-      patch(id, (m) => (m.status === 'streaming' ? { status: m.content ? 'done' : 'error', error: 'Flux interrompu sans réponse', endedAt: Date.now() } : {}))
+      patch(id, (m) => (m.status === 'streaming' ? { status: m.content ? 'done' : 'error', error: t('chat.streamInterrupted'), endedAt: Date.now() } : {}))
     } catch (e) {
       if (e.name === 'AbortError') patch(id, () => ({ status: 'aborted', endedAt: Date.now() }))
       else { patch(id, () => ({ status: 'error', error: e.message, endedAt: Date.now() })); toast.error(e.message) }
@@ -80,6 +76,7 @@ export default function ChatPage({ admin = false }) {
   }
 
   const ready = health?.rag_initialized === true
+  const suggestions = [t('chat.suggestion1'), t('chat.suggestion2'), t('chat.suggestion3')]
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -88,15 +85,15 @@ export default function ChatPage({ admin = false }) {
           {health && !ready && (
             <Alert variant="destructive">
               <CircleAlert className="size-4" />
-              <AlertTitle>Le moteur RAG n'est pas prêt</AlertTitle>
-              <AlertDescription className="break-words">{health.startup_error || 'Initialisation en cours…'}</AlertDescription>
+              <AlertTitle>{t('chat.notReady')}</AlertTitle>
+              <AlertDescription className="break-words">{health.startup_error || t('chat.initializing')}</AlertDescription>
             </Alert>
           )}
           {ready && ingesting && (
             <Alert>
               <Loader2 className="size-4 animate-spin" />
-              <AlertTitle>Ingestion en cours ({ingest.ingested}/{ingest.total})</AlertTitle>
-              <AlertDescription>Les réponses peuvent être incomplètes tant que tous les documents ne sont pas indexés.</AlertDescription>
+              <AlertTitle>{t('chat.ingesting', { done: ingest.ingested, total: ingest.total })}</AlertTitle>
+              <AlertDescription>{t('chat.ingestingHint')}</AlertDescription>
             </Alert>
           )}
 
@@ -106,13 +103,11 @@ export default function ChatPage({ admin = false }) {
                 <Sparkles className="size-7" />
               </div>
               <div className="space-y-1.5">
-                <h2 className="text-2xl font-semibold tracking-tight">Interrogez vos documents</h2>
-                <p className="max-w-md text-sm text-muted-foreground">
-                  Chaque passage de la réponse est relié au document et à la page qui l'étayent. Cliquez sur une source pour lire l'extrait original.
-                </p>
+                <h2 className="text-2xl font-semibold tracking-tight">{t('chat.emptyTitle')}</h2>
+                <p className="max-w-md text-sm text-muted-foreground">{t('chat.emptyHint')}</p>
               </div>
               <div className="flex flex-wrap justify-center gap-2">
-                {SUGGESTIONS.map((s) => (
+                {suggestions.map((s) => (
                   <Button key={s} variant="outline" size="sm" className="h-auto whitespace-normal rounded-full py-1.5 text-xs font-normal" disabled={!ready} onClick={() => send(s)}>
                     {s}
                   </Button>
@@ -135,8 +130,8 @@ export default function ChatPage({ admin = false }) {
       </div>
       <div className="border-t bg-background/80 backdrop-blur">
         <div className="mx-auto w-full max-w-4xl px-4 py-3 sm:px-6">
-          <Composer leading={admin ? <RetrievalSettings value={settings} onChange={updateSettings} disabled={busy} /> : null} onSend={send} onStop={() => abortRef.current?.abort()} busy={busy} disabled={!ready} placeholder={ready ? 'Posez votre question… (Entrée pour envoyer, Maj+Entrée pour un retour à la ligne)' : 'En attente du moteur RAG…'} />
-          <p className="mt-1.5 text-center text-[11px] text-muted-foreground">Les réponses sont générées à partir de vos documents et citent leurs sources. Vérifiez les passages importants.</p>
+          <Composer leading={admin ? <RetrievalSettings value={settings} onChange={updateSettings} disabled={busy} /> : null} onSend={send} onStop={() => abortRef.current?.abort()} busy={busy} disabled={!ready} placeholder={ready ? t('chat.placeholder') : t('chat.placeholderWaiting')} />
+          <p className="mt-1.5 text-center text-[11px] text-muted-foreground">{t('chat.disclaimer')}</p>
         </div>
       </div>
     </div>

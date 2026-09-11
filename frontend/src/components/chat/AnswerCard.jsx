@@ -8,6 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useI18n } from '@/lib/i18n'
 import { splitReferences, splitBlocks, linkifyCitations, normalizeAnswer, fileName } from '@/lib/citations'
 import ProgressStepper from './ProgressStepper'
 import SourceRail from './SourceRail'
@@ -15,17 +16,19 @@ import ChunkSheet from './ChunkSheet'
 import CopyButton from './CopyButton'
 
 function Block({ text, citations, labelFor, onCite, streaming, knownIds }) {
+  const { t } = useI18n()
   const components = useMemo(
     () => ({
       a: ({ href, children, ...props }) => {
         if (href?.startsWith('#cite?')) {
           const p = new URLSearchParams(href.slice(6))
+          const id = p.get('id')
           const pages = (p.get('pages') || '').split(',').filter(Boolean).map(Number)
           return (
             <button
               type="button"
-              onClick={() => onCite({ id: p.get('id'), page: pages.length ? pages : null })}
-              title={`Source ${p.get('id')}${pages.length ? `, page${pages.length > 1 ? 's' : ''} ${pages.join(', ')}` : ''}`}
+              onClick={() => onCite({ id, page: pages.length ? pages : null })}
+              title={pages.length ? t('answer.sourcePages', { id, pages: pages.join(', '), count: pages.length }) : t('answer.source', { id })}
               className="mx-0.5 inline-flex h-4 min-w-4 -translate-y-0.5 items-center justify-center rounded border border-primary/30 bg-primary/10 px-1 align-middle font-mono text-[10px] font-semibold leading-none text-primary no-underline transition-colors hover:bg-primary hover:text-primary-foreground"
             >
               {children}
@@ -35,7 +38,7 @@ function Block({ text, citations, labelFor, onCite, streaming, knownIds }) {
         return <a href={href} target="_blank" rel="noopener noreferrer" {...props}>{children}</a>
       },
     }),
-    [onCite],
+    [onCite, t],
   )
   const linked = useMemo(() => linkifyCitations(text, knownIds), [text, knownIds])
   return (
@@ -49,6 +52,7 @@ function Block({ text, citations, labelFor, onCite, streaming, knownIds }) {
 }
 
 export default function AnswerCard({ msg, admin = false }) {
+  const { t } = useI18n()
   const [cite, setCite] = useState(null)
   const [openDetails, setOpenDetails] = useState(false)
   const streaming = msg.status === 'streaming'
@@ -72,8 +76,8 @@ export default function AnswerCard({ msg, admin = false }) {
     const byId = new Map()
     ctxRefs.forEach((r) => byId.set(String(r.reference_id), fileName(r.file_path)))
     references.forEach((r) => { if (!byId.has(r.id)) byId.set(r.id, r.title) })
-    return (id) => byId.get(String(id)) || `Source ${id}`
-  }, [ctxRefs, references])
+    return (id) => byId.get(String(id)) || t('answer.source', { id })
+  }, [ctxRefs, references, t])
 
   const usedIds = useMemo(() => {
     const ids = new Set(references.map((r) => r.id))
@@ -98,7 +102,7 @@ export default function AnswerCard({ msg, admin = false }) {
         {msg.status === 'error' && (
           <Alert variant="destructive">
             <CircleAlert className="size-4" />
-            <AlertTitle>La génération a échoué</AlertTitle>
+            <AlertTitle>{t('answer.failed')}</AlertTitle>
             <AlertDescription className="break-words">{msg.error}</AlertDescription>
           </Alert>
         )}
@@ -113,13 +117,13 @@ export default function AnswerCard({ msg, admin = false }) {
         {streaming && blocks.length === 0 && msg.context && (
           <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
         )}
-        {msg.status === 'aborted' && <p className="text-xs italic text-muted-foreground">Génération interrompue.</p>}
+        {msg.status === 'aborted' && <p className="text-xs italic text-muted-foreground">{t('answer.aborted')}</p>}
 
         {(usedIds.length > 0 || (!streaming && msg.status !== 'error')) && (
           <div className="space-y-3 border-t pt-3">
             {usedIds.length > 0 && (
               <div className="space-y-1.5">
-                <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><BookOpen className="size-3.5" /> Sources</div>
+                <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><BookOpen className="size-3.5" /> {t('answer.sources')}</div>
                 <ul className="grid gap-1 sm:grid-cols-2">
                   {usedIds.map((id) => {
                     const n = chunks.filter((c) => String(c.reference_id) === id).length
@@ -134,7 +138,7 @@ export default function AnswerCard({ msg, admin = false }) {
                           <span className="flex size-5 shrink-0 items-center justify-center rounded bg-primary/10 font-mono text-[10px] font-semibold text-primary">{id}</span>
                           <span className="min-w-0 flex-1 truncate">{labelFor(id)}</span>
                           {pages.length > 0 && <span className="shrink-0 text-muted-foreground">p. {pages.join(', ')}</span>}
-                          {n > 0 && <Badge variant="secondary" className="shrink-0 font-normal">{n} extrait{n > 1 ? 's' : ''}</Badge>}
+                          {n > 0 && <Badge variant="secondary" className="shrink-0 font-normal">{t('answer.excerpts', { count: n })}</Badge>}
                         </button>
                       </li>
                     )
@@ -144,24 +148,24 @@ export default function AnswerCard({ msg, admin = false }) {
             )}
             {!streaming && (
               <div className="flex flex-wrap items-center gap-1">
-                <CopyButton text={body} label="Copier la réponse" size="sm" className="h-7 gap-1.5 px-2 text-xs text-muted-foreground" />
+                <CopyButton text={body} label={t('answer.copy')} size="sm" className="h-7 gap-1.5 px-2 text-xs text-muted-foreground" />
                 {admin && msg.details && (
                   <Collapsible open={openDetails} onOpenChange={setOpenDetails} className="w-full">
                     <CollapsibleTrigger asChild>
                       <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs text-muted-foreground">
-                        <ChevronDown className={cn('size-3.5 transition-transform', openDetails && 'rotate-180')} /> Détails techniques
+                        <ChevronDown className={cn('size-3.5 transition-transform', openDetails && 'rotate-180')} /> {t('answer.details')}
                       </Button>
                     </CollapsibleTrigger>
                     <CollapsibleContent className="mt-2 space-y-3 overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
-                      {[['Prompt système', msg.details.system_prompt], ['Prompt utilisateur', msg.details.user_prompt]].map(([t, v]) => v && (
-                        <div key={t} className="space-y-1">
-                          <div className="text-xs font-medium">{t}</div>
+                      {[[t('answer.systemPrompt'), msg.details.system_prompt], [t('answer.userPrompt'), msg.details.user_prompt]].map(([title, v]) => v && (
+                        <div key={title} className="space-y-1">
+                          <div className="text-xs font-medium">{title}</div>
                           <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md border bg-muted/40 p-3 font-mono text-[11px] leading-relaxed">{v}</pre>
                         </div>
                       ))}
                       {msg.details.metadata && Object.keys(msg.details.metadata).length > 0 && (
                         <div className="space-y-1">
-                          <div className="text-xs font-medium">Métadonnées</div>
+                          <div className="text-xs font-medium">{t('answer.metadata')}</div>
                           <pre className="max-h-64 overflow-auto rounded-md border bg-muted/40 p-3 font-mono text-[11px] leading-relaxed">{JSON.stringify(msg.details.metadata, null, 2)}</pre>
                         </div>
                       )}

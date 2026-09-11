@@ -1,5 +1,6 @@
 """Query API router: one-shot JSON answers and a streamed SSE variant."""
 import json
+import re
 import time
 from dataclasses import asdict, is_dataclass
 from typing import Any, AsyncIterator, Dict, List
@@ -87,6 +88,16 @@ def _sse(event: str, data: Dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+def _looks_truncated(text: str) -> bool:
+    """A generation cut off mid-sentence: no closing punctuation and no References section.
+
+    ponytail: heuristic -- the library does not surface finish_reason. An answer that
+    legitimately ends on a bare word would be flagged too.
+    """
+    t = (text or "").strip()
+    return bool(t) and "### References" not in t and not re.search(r"[.!?:)\]»*`|>]$", t)
+
+
 @router.post("", response_model=QueryResponse)
 async def query(request: QueryRequest):
     """Query the knowledge base"""
@@ -117,6 +128,21 @@ async def query(request: QueryRequest):
             return QueryResponse(success=True, query=request.query, answer=None, contexts=contexts)
 
         data = _serialize_result(result) if not isinstance(result, str) else {"content": result}
+
+        if _looks_truncated(data.get("content", "")):
+            # Retry once with the LLM cache off: it would hand back the same cut-off text.
+            # ponytail: flips a shared flag, so a concurrent query may skip the cache meanwhile.
+            logger.warning("Truncated answer for %r, retrying once", request.query)
+            rag = rag_state.rag
+            previous, rag.enable_llm_cache = rag.enable_llm_cache, False
+            try:
+                result = await rag.aquery(request.query, param=_build_param(request, stream=False))
+            finally:
+                rag.enable_llm_cache = previous
+            data = _serialize_result(result) if not isinstance(result, str) else {"content": result}
+            if _looks_truncated(data.get("content", "")):
+                return QueryResponse(success=False, query=request.query,
+                                     error="The generated answer was cut off. Please ask again.")
 
         # An empty answer means the pipeline failed somewhere and the
         # error was swallowed. Reporting success here is how a broken
@@ -182,6 +208,10 @@ async def _stream_events(request: QueryRequest) -> AsyncIterator[str]:
         if not full.strip():
             yield _sse("error", {"message": "The query returned an empty answer. Check the API logs, "
                                             "the LLM credentials and that documents have been ingested."})
+            return
+        if _looks_truncated(full):
+            # Tokens are already out, no silent retry possible: say it rather than end on half a sentence.
+            yield _sse("error", {"message": "La réponse a été interrompue avant la fin. Relancez la question."})
             return
         yield _sse("done", {
             "content": full,

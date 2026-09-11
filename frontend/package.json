@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test src/lib/citations.test.js src/lib/messages.test.js"
   },
   "dependencies": {
     "@radix-ui/react-collapsible": "^1.1.20",

@@ -1,9 +1,11 @@
 import React from 'react'
 import { FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useI18n } from '@/lib/i18n'
 
 /** Compact chips listing the (document, page) pairs cited by one block. */
 export default function SourceRail({ citations, labelFor, onOpen, className }) {
+  const { t } = useI18n()
   if (!citations?.length) return null
   return (
     <div className={cn('flex flex-wrap gap-1.5 lg:flex-col lg:items-start', className)}>
@@ -12,7 +14,7 @@ export default function SourceRail({ citations, labelFor, onOpen, className }) {
           key={`${c.id}:${c.page}`}
           type="button"
           onClick={() => onOpen(c)}
-          title="Voir le passage source"
+          title={t('answer.openSource')}
           className="group inline-flex max-w-full items-center gap-1.5 rounded-md border bg-card px-2 py-1 text-left text-[11px] leading-tight text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:bg-accent hover:text-accent-foreground"
         >
           <span className="flex size-4 shrink-0 items-center justify-center rounded bg-primary/10 font-mono text-[10px] font-semibold text-primary">{c.id}</span>

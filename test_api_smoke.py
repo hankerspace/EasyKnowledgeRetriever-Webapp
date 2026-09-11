@@ -181,6 +181,45 @@ def test_already_ingested_matches_processed_docs_by_path():
     assert run(already_ingested(Rag(), "/data/new.pdf")) is False
 
 
+def test_truncated_answers_are_detected():
+    """A generation cut mid-sentence must not be served as a finished answer."""
+    from app.routers.query import _looks_truncated
+
+    assert _looks_truncated("encadrées par le règlement (UE) 2016/6")
+    assert not _looks_truncated("Je ne dispose pas d'informations suffisantes.")
+    assert not _looks_truncated("Réponse.\n\n### References\n* [1] doc.pdf (Page 3)")
+    assert not _looks_truncated("")
+
+
+def test_query_decomposition_is_off_by_default():
+    """Decomposed queries come back without chunks or references: opt-in only."""
+    from app.models.query import QueryRequest
+
+    assert QueryRequest(query="x").query_decomposition is False
+
+
+def test_legal_headings_follow_chapters_articles_and_annexes():
+    """Each chunk gets the chapter/section/article or annex it belongs to."""
+    from app.services.headings import derive_headings
+
+    heads = derive_headings([
+        "(1) considérant\nCHAPITRE III\nSYSTÈMES D'IA À HAUT RISQUE\nSection 1\nClassification de systèmes d'IA",
+        "Article 6\nRègles relatives à la classification\n1. Un système d'IA...",
+        "suite de l'article 6",
+        "Article 19 Journaux générés automatiquement\n1. Les fournisseurs...",
+        "ANNEXE III\nSystèmes d'IA à haut risque visés à l'article 6\n1. Biométrie",
+        "2. Infrastructures critiques",
+    ])
+    crumb = "Chapitre III — Systèmes d'IA à haut risque > Section 1 — Classification de systèmes d'IA"
+    assert heads[0] == "Considérants", heads
+    assert heads[1] == heads[2] == f"{crumb} > Article 6 — Règles relatives à la classification", heads
+    assert heads[3] == f"{crumb} > Article 19 — Journaux générés automatiquement", heads
+    assert heads[4] == heads[5] == "Annexe III — Systèmes d'IA à haut risque visés à l'article 6", heads
+    # a chunk that opens the next annex mid-way carries both
+    spanning = derive_headings(["ANNEXE II\nListe des infractions\n- terrorisme\nANNEXE III\nSystèmes d'IA à haut risque\n1. Biométrie"])
+    assert spanning == ["Annexe II — Liste des infractions ; puis Annexe III — Systèmes d'IA à haut risque"], spanning
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failures = 0
